@@ -1,0 +1,19 @@
+{
+  "name": "@umbral/server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "migrate": "tsx src/persistence/migration-cli.ts"
+  },
+  "dependencies": {
+    "@umbral/core": "workspace:*",
+    "@umbral/protocol": "workspace:*",
+    "@umbral/content": "workspace:*",
+    "@colyseus/core": "0.18.18",
+    "@colyseus/ws-transport": "0.18.4",
+    "express": "^5.1.0",
+    "pg": "^8.16.3",
+    "zod": "4.6.7"
+  }
+}

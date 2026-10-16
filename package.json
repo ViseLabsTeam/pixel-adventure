@@ -1,0 +1,40 @@
+{
+  "name": "umbral-cooperativo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.34.7",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n server,web \"pnpm --filter @umbral/server dev\" \"pnpm --filter @umbral/web dev\"",
+    "build": "pnpm assets:prepare && pnpm typecheck && pnpm --filter @umbral/web build && node scripts/build-server.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run packages",
+    "test:integration": "vitest run apps/server/tests",
+    "test:e2e": "playwright test",
+    "db:migrate": "pnpm --filter @umbral/server migrate",
+    "assets:prepare": "node scripts/prepare-assets.mjs",
+    "content:validate": "tsx scripts/validate-content.ts",
+    "format": "prettier --write \"apps/**/*.{ts,tsx,css,json}\" \"packages/**/*.{ts,json}\" \"scripts/*.{ts,mjs}\" \"tests/**/*.ts\" playwright.config.ts",
+    "format:check": "prettier --check \"apps/**/*.{ts,tsx,css,json}\" \"packages/**/*.{ts,json}\" \"scripts/*.{ts,mjs}\" \"tests/**/*.ts\" playwright.config.ts",
+    "check": "pnpm typecheck && pnpm test && pnpm content:validate && pnpm format:check",
+    "docs:check": "node scripts/check-docs.mjs"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "tsx": "^4.20.5",
+    "vitest": "5.0.5",
+    "@playwright/test": "^1.55.0",
+    "@types/node": "^22.18.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@types/express": "^5.0.0",
+    "@types/pg": "^8.15.0",
+    "concurrently": "^9.2.0",
+    "esbuild": "0.28.2",
+    "sharp": "^0.34.3",
+    "prettier": "3.6.2"
+  }
+}

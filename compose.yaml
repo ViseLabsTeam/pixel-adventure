@@ -1,0 +1,47 @@
+name: umbral-demo
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: umbral
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-umbral_local}
+      POSTGRES_DB: umbral
+    ports:
+      - "127.0.0.1:5434:5432"
+    volumes:
+      - campaign_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U umbral -d umbral"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  server:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile
+      target: server
+    environment:
+      NODE_ENV: production
+      PORT: 2567
+      DATABASE_URL: postgres://umbral:${POSTGRES_PASSWORD:-umbral_local}@db:5432/umbral
+      APP_ORIGINS: ${APP_ORIGINS:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:2567/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 4s
+      retries: 15
+  web:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile
+      target: web
+    ports:
+      - "${WEB_PORT:-8088}:80"
+    depends_on:
+      server:
+        condition: service_healthy
+volumes:
+  campaign_data:

@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "characters": {
+    "paladin": {
+      "source": "paladin/animascion_pasiva.gif",
+      "portrait": "paladin/generated/portrait.png",
+      "animation": "spritesheet-demo",
+      "clips": "paladin/generated/animations.json"
+    },
+    "guerrero": {
+      "source": "guerrero/indie.gif",
+      "portrait": "guerrero/generated/portrait.png",
+      "animation": "spritesheet-demo",
+      "clips": "guerrero/generated/animations.json"
+    },
+    "mago": {
+      "source": "mago/bola_de_fuego_.gif",
+      "portrait": "mago/generated/portrait.png",
+      "animation": "spritesheet-demo",
+      "clips": "mago/generated/animations.json"
+    }
+  },
+  "map": "mapas/generated/courtyard.webp"
+}

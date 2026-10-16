@@ -1,0 +1,9 @@
+{
+  "name": "@umbral/content",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/public.ts",
+    "./prototype": "./src/prototype.ts"
+  }
+}
