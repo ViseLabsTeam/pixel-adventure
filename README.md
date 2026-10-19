@@ -1,6 +1,6 @@
 # Umbral — RPG cooperativo web
 
-Demo local para **2 a 4 jugadores**. Una pantalla compartida muestra el tablero; cada celular muestra su ficha y envía acciones. Revisado el **16 de octubre de 2026**.
+Demo local para **2 a 4 jugadores**. Una pantalla compartida muestra el tablero; cada celular muestra su ficha y envía acciones. Revisado el **19 de octubre de 2026**.
 
 ## Probar con Docker
 
@@ -13,6 +13,8 @@ docker compose ps
 
 Abrí **http://localhost:8088**. Compose crea PostgreSQL 18, aplica las migraciones al iniciar el servidor y sirve la web con Nginx. Las partidas se guardan en el volumen `campaign_data`. Para detener sin borrar las partidas: `docker compose stop`; para continuar: `docker compose up -d`.
 
+La imagen Docker usa los recursos derivados incluidos en el árbol de trabajo. Cuando cambien los GIF o el mapa fuente, ejecutar `pnpm assets:prepare` antes de `docker compose up -d --build`; el build local `pnpm build` también los regenera.
+
 Los valores predeterminados son para desarrollo local. `.env.example` documenta puertos y variables. PostgreSQL solo publica su puerto en `127.0.0.1:5434`; la web publica `8088`. El servidor y los WebSockets quedan detrás del proxy. No se contrató ni publicó alojamiento.
 
 ### Una mesa y varios celulares
@@ -21,9 +23,9 @@ Los valores predeterminados son para desarrollo local. `.env.example` documenta 
 2. Conservá el **código privado de recuperación** del lobby; es distinto del código público de invitación.
 3. En cada celular, abrí la IP local de esa computadora con el puerto 8088, por ejemplo `http://192.168.1.10:8088`. Ambos dispositivos deben estar en la misma red y el firewall debe permitir ese puerto.
 4. Elegí **Unirse a una partida**, ingresá el código público, nombre y personaje. También podés editar la dirección del QR en «Conectar celulares en la misma red». Un QR que contiene localhost apunta al propio teléfono.
-5. Con 2–4 viajeros conectados, el coordinador inicia. El celular tira movimiento, envía pasos, elige ataque/objetos y finaliza turno. **El tablero solo aparece en la pantalla compartida**.
+5. Con 2–3 viajeros conectados, el coordinador inicia. En el celular, **Personaje** reúne ficha, dados, movimiento y ataques; **Inventario** muestra bolsa y equipo en otra vista. Ambas caben en una pantalla móvil sin desplazar la página. **El tablero solo aparece en la pantalla compartida**.
 
-Hay paladín, guerrero y mago. **La arquera no es seleccionable.** Las estadísticas son de prueba. La bolsa tiene **4 espacios**, más **casco, guantes, pantalones y pechera**: el equipo modifica estadísticas y conserva la apariencia.
+Hay paladín, guerrero, mago y arquera. Cada clase se elige una sola vez por mesa: se reserva durante 30 segundos al seleccionarla, se renueva mientras el formulario esté abierto y queda ocupada al unirse. Una reserva abandonada vence. **Las estadísticas de la arquera son de prueba**: alcance 3, poca vida y daño físico alto. La bolsa tiene **4 espacios**, más **casco, guantes, pantalones y pechera**: el equipo modifica estadísticas y conserva la apariencia.
 
 ### Guardado y recuperación
 
@@ -35,7 +37,9 @@ Cada operación confirmada guarda snapshot, eventos y recibo juntos. Una recarga
 
 ## Alcance de esta demo
 
-Inicio, configuración local de sonido/volumen/animación/grilla, lobby con QR, controles móviles, tablero de 10 × 10, barras de vida, dos enemigos de prueba, cuatro cofres y zonas de fuente/salida. Mapa a la derecha a alto completo, panel lateral izquierdo y barras de recursos por tercios. El tablero reproduce spritesheets derivados de los GIF para movimiento y ataques; detalles y fallbacks en docs/demo.md. El Anfitrión guía la expedición sin revelar la trama final.
+Inicio, configuración local de sonido/volumen/animación/grilla, lobby con QR, controles móviles, tablero explorable con cámara, barras de vida, tres enemigos de prueba incluido el goblin, cuatro cofres y zonas de fuente/salida. Mapa a la derecha a alto completo, panel lateral izquierdo y barras de recursos por tercios. El tablero reproduce spritesheets derivados de los GIF para movimiento y ataques. La tirada D6/D20 aparece en el celular y en la mesa con el nombre de quien la hizo; el resultado se revela después de la animación. La ficha y el inventario móviles aprovechan el espacio disponible con un retrato ampliado. Detalles y fallbacks en docs/demo.md. El Anfitrión guía la expedición sin revelar la trama final.
+
+Cada paso cardinal dura 2 segundos. En combate termina primero la animación de ataque, luego aparece el daño o fallo y después cambia la barra de vida; los ataques enemigos siguen el mismo orden. Un fallo no reduce vida.
 
 El preset empieza en combate: distancia Manhattan, redondeo hacia abajo, daño mínimo cero y una acción por turno. Equipar, desequipar, consumir e interactuar gastan esa acción. Los cofres se abren tras eliminar los enemigos; el botín va al primer personaje vivo con espacio, o queda junto al cofre. La salida **termina el encuentro de demo**, no implementa la transición entre stages. Ver [políticas y valores](docs/demo.md).
 
@@ -63,7 +67,7 @@ Desarrollo: web **http://localhost:5173**, servidor interno **2567** y PostgreSQ
 | `pnpm build` | Recursos derivados, tipos, bundle web y servidor. |
 | `pnpm test:integration` | Pruebas PostgreSQL sobre una base cuyo nombre termine en `_test`. |
 | `pnpm test:e2e` | Navegador contra la demo levantada; crea campañas de prueba. |
-| `pnpm assets:prepare` | Regenera retratos, escenario y manifiesto; conserva originales. |
+| `pnpm assets:prepare` | Regenera retratos, escenario, animaciones, vistas de dados y manifiesto; conserva originales. |
 | `pnpm format` | Formatea código y pruebas. |
 | `pnpm docs:check` | Comprueba enlaces locales de Markdown. |
 
@@ -83,7 +87,7 @@ Puede cambiarse la conexión mediante `TEST_DATABASE_URL`. Las pruebas eliminan 
 - `packages/core`: reglas independientes y aleatoriedad inyectada.
 - `packages/protocol`: contratos y validación de comandos.
 - `packages/content`: catálogo público y preset exclusivo del servidor.
-- `assets/{paladin,guerrero,mago,mapas,maestro}`: originales por categoría; derivados dentro de `generated`.
+- `assets/{paladin,guerrero,mago,arquera,enemigos,mapas,maestro,dados,fuentes}`: recursos por categoría; derivados dentro de `generated` cuando corresponde.
 - `infra`, `scripts`, `tests/e2e`: contenedores, herramientas y pruebas.
 
 | Documento | Contenido |

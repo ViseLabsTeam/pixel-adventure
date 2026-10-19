@@ -14,7 +14,7 @@ Este documento consolida las decisiones de la conversación. Las reglas marcadas
 - La demo debe incluir inicio, lobby, configuración y entrada a partida; las cifras actuales son valores de prueba.
 - Aventura automática. El maestro de mesa es un personaje inventado que guía al grupo y resulta ser el villano final sorpresa: pretende causar la muerte de quienes conduce. Esta revelación es información de diseño, no texto del lobby ni del control móvil. En la demo se presenta como El Anfitrión.
 - Estética pixel art.
-- Clases previstas: mago, paladín, arquero y guerrero/caballero. La arquera no debe ser seleccionable en la demo actual. Nombres definitivos, estadísticas y habilidades pendientes.
+- Clases previstas: mago, paladín, arquera y guerrero/caballero. La arquera ya es seleccionable en la demo por indicación posterior del responsable. Nombres definitivos, estadísticas y habilidades pendientes; sus valores actuales son de prueba.
 - El juego contiene varias salas distribuidas en varias stages. Falta definir la relación exacta entre sala y stage.
 - La partida debe poder guardarse y retomarse con sus datos completos.
 
@@ -359,6 +359,10 @@ Las estadísticas, habilidades y tablas definitivas de objetos permanecen en sta
 
 ## Decisiones confirmadas: barras de clase y roles
 
-Paladín tanque: mayor vida y armadura, menor daño; Fe dorada. Guerrero: equilibrio entre vida y daño físico; Furia roja. Mago: mayor daño y resistencia mágica, poca vida y alcance 2; Maná celeste. Arquera futura: alcance 3, poca vida y alto daño; Enfoque verde claro, aún no seleccionable.
+Paladín tanque: mayor vida y armadura, menor daño; Fe dorada. Guerrero: equilibrio entre vida y daño físico; Furia roja. Mago: mayor daño y resistencia mágica, poca vida y alcance 2; Maná celeste. Arquera: alcance 3, poca vida y alto daño; Enfoque verde claro. Ya es seleccionable con estadísticas provisionales.
 
 Barra dividida en tercios: especial consume uno, ulti los tres. Básicos e ítems recuperan recurso. Para la demo se aceptaron inicio en 1/3, recarga de 1/3 por básico o poción y habilidades de daño aumentado. Valores, nombres y multiplicadores numéricos temporales en [contrato de demo](docs/demo.md); no fijan balance definitivo.
+
+## Ritmo visual confirmado
+
+Respetar la duración de las animaciones originales y no habilitar la siguiente fase hasta que termine la reproducción. La figura del personaje ocupa aproximadamente una casilla y media; el paladín es algo más alto. Esto no amplía su casilla lógica ni hitbox.

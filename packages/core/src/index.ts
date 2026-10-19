@@ -1,4 +1,4 @@
-export type ClassId = "paladin" | "warrior" | "mage";
+export type ClassId = "paladin" | "warrior" | "mage" | "archer";
 export type EquipmentSlot = "helmet" | "gloves" | "pants" | "chest";
 export interface Point {
   x: number;
@@ -40,6 +40,7 @@ export interface Item {
 }
 export interface Enemy extends Point {
   id: string;
+  archetypeId?: string;
   name: string;
   hp: number;
   maxHp: number;
@@ -75,7 +76,15 @@ export interface Zone extends Point {
 export interface Content {
   version: string;
   classes: Record<ClassId, Stats>;
-  map: { width: number; height: number; walls: Point[]; spawns: Point[] };
+  map: {
+    minX: number;
+    minY: number;
+    width: number;
+    height: number;
+    terrain: readonly string[];
+    walls: Point[];
+    spawns: Point[];
+  };
   enemies: Enemy[];
   chests: Chest[];
   zones: Zone[];
@@ -110,6 +119,7 @@ export interface Content {
 }
 export interface Game {
   animationUntil?: number;
+  animationPending?: boolean;
   id: string;
   code: string;
   revision: number;
@@ -128,7 +138,13 @@ export interface Game {
   chests: Chest[];
   zones: Zone[];
   items: Record<string, Item>;
-  map: { width: number; height: number; walls: Point[] };
+  map: {
+    minX: number;
+    minY: number;
+    width: number;
+    height: number;
+    walls: Point[];
+  };
   events: Event[];
   fountainUsed: string[];
 }
@@ -260,6 +276,8 @@ export function createGame(id: string, code: string, content: Content): Game {
     zones: structuredClone(content.zones),
     items: {},
     map: {
+      minX: content.map.minX,
+      minY: content.map.minY,
       width: content.map.width,
       height: content.map.height,
       walls: structuredClone(content.map.walls),
@@ -296,14 +314,19 @@ export function addPlayer(
     "La aventura ya comenzó. Recuperá un personaje existente.",
   );
   requireRule(
-    input.players.length < 4,
-    "LOBBY_FULL",
-    "La mesa ya tiene cuatro viajeros.",
-  );
-  requireRule(
     Object.hasOwn(content.classes, classId),
     "INVALID_CLASS",
     "Clase no disponible.",
+  );
+  requireRule(
+    !input.players.some((player) => player.classId === classId),
+    "CLASS_TAKEN",
+    "Ese personaje ya fue elegido en esta mesa.",
+  );
+  requireRule(
+    input.players.length < Math.min(4, Object.keys(content.classes).length),
+    "LOBBY_FULL",
+    "La mesa ya tiene todos los personajes disponibles.",
   );
   const game = structuredClone(input),
     slot = game.players.length;
@@ -347,12 +370,13 @@ function giveItem(
   };
   player.inventory[index] = id;
 }
-function passable(game: Game, p: Point, exceptId: string) {
+function passable(game: Game, content: Content, p: Point, exceptId: string) {
   return (
-    p.x >= 0 &&
-    p.y >= 0 &&
-    p.x < game.map.width &&
-    p.y < game.map.height &&
+    p.x >= game.map.minX &&
+    p.y >= game.map.minY &&
+    p.x < game.map.minX + game.map.width &&
+    p.y < game.map.minY + game.map.height &&
+    content.map.terrain[p.y - game.map.minY]?.[p.x - game.map.minX] === "1" &&
     !game.map.walls.some((w) => same(w, p)) &&
     !game.players.some((a) => a.id !== exceptId && a.hp > 0 && same(a, p)) &&
     !game.enemies.some((a) => a.id !== exceptId && a.hp > 0 && same(a, p)) &&
@@ -396,7 +420,7 @@ function safeLoot(game: Game, content: Content) {
     );
   }
 }
-function enemyPhase(game: Game, dice: Dice) {
+function enemyPhase(game: Game, content: Content, dice: Dice) {
   for (const enemy of game.enemies.filter((e) => e.hp > 0)) {
     const target = game.players
       .filter((p) => p.hp > 0)
@@ -415,7 +439,7 @@ function enemyPhase(game: Game, dice: Dice) {
         { x: enemy.x, y: enemy.y + 1 },
         { x: enemy.x, y: enemy.y - 1 },
       ]
-        .filter((p) => passable(game, p, enemy.id))
+        .filter((p) => passable(game, content, p, enemy.id))
         .sort((a, b) => distance(a, target) - distance(b, target));
       if (
         options[0] &&
@@ -460,11 +484,11 @@ function enemyPhase(game: Game, dice: Dice) {
     }
   }
 }
-function endTurn(game: Game, dice: Dice) {
+function endTurn(game: Game, content: Content, dice: Dice) {
   const current = game.players.find((p) => p.id === game.activePlayerId)!;
   let next = game.players.find((p) => p.slot > current.slot && p.hp > 0);
   if (!next) {
-    enemyPhase(game, dice);
+    enemyPhase(game, content, dice);
     game.round++;
     next = game.players.find((p) => p.hp > 0);
   }
@@ -541,6 +565,7 @@ export function resolve(
         "DICE",
         `${player.name}: ${game.movementLeft} casillas de movimiento.`,
         [game.movementRoll],
+        { actorId: player.id },
       );
       break;
     case "MOVE_STEP": {
@@ -555,7 +580,7 @@ export function resolve(
       requireRule(delta, "INVALID_DIRECTION", "Usá una dirección cardinal.");
       const next = { x: player.x + delta[0], y: player.y + delta[1] };
       requireRule(
-        passable(game, next, player.id),
+        passable(game, content, next, player.id),
         "BLOCKED_PATH",
         "Esa casilla está bloqueada.",
       );
@@ -758,7 +783,7 @@ export function resolve(
       break;
     }
     case "END_TURN":
-      endTurn(game, dice);
+      endTurn(game, content, dice);
       break;
   }
   game.revision++;

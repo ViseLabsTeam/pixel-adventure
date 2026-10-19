@@ -1,0 +1,42 @@
+{
+  "idle": {
+    "count": 4,
+    "delays": [
+      160,
+      160,
+      160,
+      160
+    ],
+    "duration": 640,
+    "originX": 0.46875,
+    "originY": 0.96875,
+    "scale": 0.4375,
+    "source": "Goblin_Enemy_32x32.gif",
+    "indices": [
+      0,
+      1,
+      2,
+      3
+    ]
+  },
+  "basic": {
+    "count": 4,
+    "delays": [
+      120,
+      80,
+      120,
+      120
+    ],
+    "duration": 440,
+    "originX": 0.421875,
+    "originY": 0.96875,
+    "scale": 0.45652173913043476,
+    "source": "Goblin_Enemy_32x32_attack.gif",
+    "indices": [
+      0,
+      1,
+      2,
+      3
+    ]
+  }
+}

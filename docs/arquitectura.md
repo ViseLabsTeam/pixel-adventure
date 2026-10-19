@@ -41,8 +41,11 @@ Las rutas siguientes existen. Crear nuevas capas solo cuando una responsabilidad
 │   ├── paladin/generated/
 │   ├── guerrero/generated/
 │   ├── mago/generated/
+│   ├── arquera/generated/
 │   ├── mapas/generated/
 │   ├── maestro/
+│   ├── dados/generated/
+│   ├── fuentes/
 │   └── manifest.json
 ├── tests/e2e/
 ├── infra/
@@ -53,6 +56,8 @@ Las rutas siguientes existen. Crear nuevas capas solo cuando una responsabilidad
 Los tests unitarios se colocan junto al módulo que verifican; los de integración del servidor, dentro de `apps/server`. `tests/e2e` concentra los recorridos que necesitan ambas aplicaciones.
 
 Los originales están centralizados por categoría en assets, junto a su inventario; generated contiene derivados reproducibles. La migración conserva los archivos fuente y sus nombres. El stub src/index.ts se retiró al crear las aplicaciones.
+
+Las [recetas de actores](../packages/content/actor-recipes.json) relacionan cada clase o tipo de enemigo con carpeta, retrato, tamaño visual y clips; scripts y tablero las consumen. El contenido exclusivo del servidor define estadísticas de clase, plantillas de enemigo y posiciones iniciales en `prototype.ts`. Una aparición de enemigo tiene ID propio y `archetypeId` para reutilizar la misma receta. Agregar una clase requiere también validar su contrato, retrato y reserva; agregar un enemigo con arte requiere publicar sus derivados en la imagen web.
 
 ## 3. Responsabilidades e importaciones
 
@@ -73,6 +78,8 @@ El paquete `content` separa exportaciones públicas de contenido exclusivo del s
 Ejemplos de dependencias prohibidas: `core → React`, `protocol → pg`, `web → server`, `web → core` para resolver acciones autoritativas, y `content → Phaser`. Los paquetes no acceden a rutas internas de otros paquetes con importaciones relativas que atraviesen su límite.
 
 El workspace declara sus paquetes y un único lockfile. Para dependencias locales usa `workspace:*`, que obliga a resolver contra el workspace según la [documentación de pnpm](https://pnpm.io/workspaces). La versión de pnpm y los scripts están en package.json.
+
+Las instalaciones `node_modules` de la raíz y de cada paquete quedan fuera de Git. El lockfile es la fuente reproducible de dependencias; `.gitignore` usa una regla recursiva para evitar versionar instalaciones anidadas.
 
 ## 4. Recorrido de una operación
 
@@ -183,13 +190,13 @@ La selección de objetivo puede compartirse como información de presentación, 
 
 El mapa lógico conserva coordenadas enteras, ocupación y propiedades de bloqueo. Las capas visuales y animaciones no determinan reglas de colisión. La conversión de un mapa de Tiled debe validarse antes de servirlo.
 
-El recurso de escenario recibido es `assets/mapas/Scene_Overview.png`, una imagen plana de 1200 × 1200. No hay mapa de Tiled ni tileset separado. El preset incorpora una grilla lógica 10 × 10 independiente. Puede servir como referencia o fondo, con las propiedades lógicas definidas por separado; los objetos dibujados no se convierten automáticamente en entidades.
+El recurso de escenario recibido es `assets/mapas/Scene_Overview.png`, una imagen plana de 1200 × 1200. No hay mapa de Tiled ni tileset separado. El preset incorpora un mundo lógico de 58 × 70 casillas con coordenadas negativas y una máscara provisional de la silueta de las ruinas generada desde el PNG; una cámara muestra una ventana de ese mundo. Los objetos dibujados no se convierten automáticamente en entidades ni colisiones.
 
-Un manifiesto de animación deberá describir identificador lógico, recurso, fotogramas, duración, repetición, escala, punto de apoyo y dirección. La demo usa generated/animations.json por clase con fuente, índices, origen, escala y cantidad; la escena define tiempos abreviados y repetición. Los GIFs recibidos son fuentes: comprobar su conversión y reproducción en el tablero, no asumir que ya son spritesheets utilizables.
+Un manifiesto de animación deberá describir identificador lógico, recurso, fotogramas, duración, repetición, escala, punto de apoyo y dirección. La demo usa generated/animations.json por clase con fuente, índices, origen, escala y cantidad; los retardos originales y el catálogo de duraciones generado definen la reproducción; la escena define repetición. Los GIFs recibidos son fuentes: comprobar su conversión y reproducción en el tablero, no asumir que ya son spritesheets utilizables.
 
 El paladín es el conjunto completo de referencia. Los inventarios registran también el guerrero y el mago, distinguiendo archivos ausentes y acciones por asignar. Los lienzos del paladín son de 720 × 480; los del guerrero y el mago, de 720 × 486. Compartir una escala y un punto de apoyo requiere preparar los recursos, no asumir que el lienzo equivale a la casilla.
 
-La convención confirmada es **`caminata_S → −Y`** y el archivo recibido se llama `caminata_s.gif`. El adaptador visual traduce coordenadas lógicas a pantalla y selecciona animaciones explícitamente; no deducir los ejes por convenciones habituales de letras o coordenadas de pantalla. Respetar las mayúsculas y minúsculas de las rutas para que funcionen también en sistemas sensibles a ellas. Las otras caminatas permanecen sin asignación confirmada en el [inventario](../assets/paladin/README.md).
+La corrección vigente confirma **`caminata_W.gif → arriba (−Y)`** y **`caminata_s.gif → abajo (+Y)`**. Los sprites se reflejan horizontalmente para mirar a izquierda/derecha; esa orientación se conserva en reposo y ataque. El adaptador visual traduce coordenadas lógicas a pantalla y selecciona animaciones explícitamente. Respetar las mayúsculas y minúsculas de las rutas para que funcionen también en sistemas sensibles a ellas. Ver el [inventario](../assets/paladin/README.md).
 
 ## 10. Costos y evolución
 
@@ -198,3 +205,5 @@ Medir tamaño del bundle por ruta, carga de assets, tiempo de respuesta a comand
 En el primer flujo, mantener operaciones discretas, actualizaciones de estado necesarias y animaciones locales. Definir índices a partir de consultas reales y evitar cargar historial ilimitado al reconectar. Conservar recibos mientras puedan llegar reintentos válidos; su eliminación requiere una política explícita.
 
 No agregar caché distribuida, microservicios, un bus de eventos externo ni varios escritores por campaña sin una necesidad demostrada. Para escalar, registrar antes el cuello de botella, las alternativas y el impacto sobre integridad en un ADR. Las comprobaciones concretas están en [buenas prácticas](buenas-practicas-desarrollo.md).
+
+El bloqueo visual durable se aplica en la capa de aplicación, después de recuperar recibos y antes de resolver nuevos comandos. El motor no depende del reloj ni de Phaser. La confirmación de reproducción de la mesa solo libera presentación y nunca decide daño, movimiento ni tiradas.

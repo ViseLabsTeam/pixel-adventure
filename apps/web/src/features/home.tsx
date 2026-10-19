@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   Plus,
@@ -7,31 +7,149 @@ import {
   Shield,
   Swords,
   Sparkles,
+  Crosshair,
   Smartphone,
   Monitor,
   ChevronLeft,
 } from "lucide-react";
 import { classes, type ClassId } from "@umbral/content";
-import type { Session } from "@umbral/protocol";
+import type { ClassAvailability, Session } from "@umbral/protocol";
 import { api, loadSession } from "../connection/use-campaign";
+function newReservationToken() {
+  return Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+}
 export function Home({
   onSession,
 }: {
   onSession: (session: Session, recoveryCode?: string) => void;
 }) {
-  const [masterActive,setMasterActive]=useState(false);
-  const masterInteraction={onMouseEnter:()=>setMasterActive(true),onMouseLeave:()=>setMasterActive(false),onFocus:()=>setMasterActive(true),onBlur:()=>setMasterActive(false)};
+  const [masterActive, setMasterActive] = useState(false);
+  const masterInteraction = {
+    onMouseEnter: () => setMasterActive(true),
+    onMouseLeave: () => setMasterActive(false),
+    onFocus: () => setMasterActive(true),
+    onBlur: () => setMasterActive(false),
+  };
   const hash = location.hash.split("/");
   const [page, setPage] = useState<"home" | "join" | "recover">(
     hash[1] === "join" ? "join" : "home",
   );
   const [name, setName] = useState(""),
     [code, setCode] = useState(hash[2] ?? ""),
-    [classId, setClassId] = useState<ClassId>("paladin"),
+    [classId, setClassId] = useState<ClassId | null>(null),
+    [availability, setAvailability] = useState<ClassAvailability | null>(null),
+    [selectionBusy, setSelectionBusy] = useState(false),
     [recovery, setRecovery] = useState(""),
     [claimCode, setClaimCode] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const reservationToken = useRef<string>("");
+  if (!reservationToken.current)
+    reservationToken.current = newReservationToken();
+  const currentCode = useRef(code);
+  currentCode.current = code;
+  useEffect(() => {
+    if (page !== "join" || code.length !== 6) {
+      setAvailability(null);
+      return;
+    }
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const next = await api("class-availability", {
+          code,
+          reservationToken: reservationToken.current,
+        });
+        if (!cancelled) {
+          setAvailability(next);
+          if (
+            classId &&
+            (next.occupied.includes(classId) || next.reserved.includes(classId))
+          )
+            setClassId(null);
+        }
+      } catch (cause) {
+        if (!cancelled) {
+          setAvailability(null);
+          setError(
+            cause instanceof Error
+              ? cause.message
+              : "No se pudo consultar la mesa.",
+          );
+        }
+      }
+    };
+    void refresh();
+    const timer = setInterval(() => void refresh(), 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [page, code, classId]);
+  useEffect(() => {
+    if (page !== "join" || !classId || code.length !== 6) return;
+    const timer = setInterval(() => {
+      void api("reserve-class", {
+        code,
+        classId,
+        reservationToken: reservationToken.current,
+      }).catch((cause) => {
+        setClassId(null);
+        setError(
+          cause instanceof Error ? cause.message : "Se perdió la reserva.",
+        );
+      });
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [page, code, classId]);
+  async function selectClass(id: ClassId) {
+    if (code.length !== 6 || selectionBusy) return;
+    setSelectionBusy(true);
+    setError("");
+    try {
+      await api("reserve-class", {
+        code,
+        classId: id,
+        reservationToken: reservationToken.current,
+      });
+      if (currentCode.current === code) {
+        setClassId(id);
+        setAvailability(
+          await api("class-availability", {
+            code,
+            reservationToken: reservationToken.current,
+          }),
+        );
+      }
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "No se pudo elegir el personaje.",
+      );
+      setAvailability(
+        await api("class-availability", {
+          code,
+          reservationToken: reservationToken.current,
+        }).catch(() => null),
+      );
+    } finally {
+      setSelectionBusy(false);
+    }
+  }
+  function releaseSelection(previousCode = code) {
+    if (classId && previousCode.length === 6) {
+      const oldToken = reservationToken.current;
+      reservationToken.current = newReservationToken();
+      void api("release-class", {
+        code: previousCode,
+        reservationToken: oldToken,
+      }).catch(() => undefined);
+    }
+    setClassId(null);
+  }
   async function run(
     operation: () => Promise<{ session: Session; recoveryCode?: string }>,
   ) {
@@ -97,7 +215,7 @@ export function Home({
           <div className="hero-meta">
             <span>
               <Users size={16} />
-              2–4 viajeros
+              2–3 viajeros
             </span>
             <span>
               <Monitor size={16} />
@@ -110,12 +228,13 @@ export function Home({
           </div>
         </div>
         <div className="hero-art">
-          
-          
-          
           <img
             className="master-illustration"
-            src={masterActive ? "/assets/maestro/maestro.PNG" : "/assets/maestro/maestro2.PNG"}
+            src={
+              masterActive
+                ? "/assets/maestro/maestro.PNG"
+                : "/assets/maestro/maestro2.PNG"
+            }
             alt="El Anfitrión, maestro de ceremonias"
           />
           <div className="guide-quote">
@@ -137,7 +256,13 @@ export function Home({
       )}
       {page !== "home" && (
         <section className="entry-panel" id="entry">
-          <button className="text-link" onClick={() => setPage("home")}>
+          <button
+            className="text-link"
+            onClick={() => {
+              releaseSelection();
+              setPage("home");
+            }}
+          >
             <ChevronLeft size={15} /> Volver
           </button>
           <span className="eyebrow">
@@ -152,7 +277,15 @@ export function Home({
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                void run(() => api("join", { code, name, classId }));
+                if (classId)
+                  void run(() =>
+                    api("join", {
+                      code,
+                      name,
+                      classId,
+                      reservationToken: reservationToken.current,
+                    }),
+                  );
               }}
             >
               <div className="form-grid">
@@ -162,7 +295,12 @@ export function Home({
                     autoFocus
                     placeholder="ABC234"
                     value={code}
-                    onChange={(e) => setCode(e.target.value.toUpperCase())}
+                    onChange={(e) => {
+                      releaseSelection(code);
+                      setCode(e.target.value.toUpperCase());
+                      setAvailability(null);
+                      setError("");
+                    }}
                     maxLength={6}
                     required
                     autoComplete="off"
@@ -191,19 +329,41 @@ export function Home({
                     role="radio"
                     aria-checked={classId === id}
                     className={`class-option ${classId === id ? "selected" : ""}`}
-                    onClick={() => setClassId(id)}
+                    disabled={
+                      selectionBusy ||
+                      code.length !== 6 ||
+                      !availability ||
+                      availability.status !== "LOBBY" ||
+                      availability.occupied.includes(id) ||
+                      availability.reserved.includes(id)
+                    }
+                    onClick={() => void selectClass(id)}
                     key={id}
                   >
                     <img src={classes[id].portrait} alt="" />
                     <span>
                       {classes[id].name}
-                      <small>Alcance {classes[id].range}</small>
+                      <small>
+                        {availability?.occupied.includes(id)
+                          ? "Ocupado"
+                          : availability?.reserved.includes(id)
+                            ? "Reservado"
+                            : `Alcance ${classes[id].range}`}
+                      </small>
                     </span>
                     <i>{classId === id ? "✦" : "○"}</i>
                   </button>
                 ))}
               </div>
-              <button className="button gold" disabled={busy}>
+              <button
+                className="button gold"
+                disabled={
+                  busy ||
+                  selectionBusy ||
+                  !classId ||
+                  availability?.status !== "LOBBY"
+                }
+              >
                 Sentarme a la mesa <ArrowRight size={17} />
               </button>
             </form>
@@ -274,14 +434,14 @@ export function Home({
       <section className="roster-preview" hidden={page !== "home"}>
         <div className="section-heading">
           <div>
-            <span className="eyebrow">TRES CAMINOS. UN MISMO DESTINO.</span>
+            <span className="eyebrow">CUATRO CAMINOS. UN MISMO DESTINO.</span>
             <h2>¿Quién cruzará el umbral?</h2>
           </div>
           <span className="demo-badge">DEMO JUGABLE · VALORES DE PRUEBA</span>
         </div>
         <div className="preview-grid">
           {(Object.keys(classes) as ClassId[]).map((id, index) => {
-            const Icon = [Shield, Swords, Sparkles][index];
+            const Icon = [Shield, Swords, Sparkles, Crosshair][index];
             return (
               <article className={`preview-card ${id}`} key={id}>
                 <div>

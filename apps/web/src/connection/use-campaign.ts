@@ -1,12 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 import { Client, type Room } from "@colyseus/sdk";
-import type { Command, GameView, Receipt, Session } from "@umbral/protocol";
-import { SESSION_REPLACED } from "@umbral/protocol";
-export async function api<T>(
-  path: string,
+import type {
+  Command,
+  GameView,
+  Session,
+  ApiPath,
+  ApiResponse,
+} from "@umbral/protocol";
+import {
+  SESSION_REPLACED,
+  apiResponseSchemas,
+  commandSchema,
+  failureSchema,
+  gameViewSchema,
+  receiptSchema,
+  sessionSchema,
+  storageErrorSchema,
+} from "@umbral/protocol";
+export async function api<Path extends ApiPath>(
+  path: Path,
   body: unknown = {},
   token?: string,
-): Promise<T> {
+): Promise<ApiResponse<Path>> {
   const response = await fetch(`/api/${path}`, {
     method: "POST",
     headers: {
@@ -15,10 +30,18 @@ export async function api<T>(
     },
     body: JSON.stringify(body),
   });
-  const result = await response.json();
-  if (!response.ok)
-    throw new Error(result.message ?? "No se pudo completar la operación.");
-  return result;
+  const result: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    const failure = storageErrorSchema.safeParse(result);
+    throw new Error(
+      failure.success
+        ? failure.data.message
+        : "No se pudo completar la operación.",
+    );
+  }
+  const parsed = apiResponseSchemas[path].safeParse(result);
+  if (!parsed.success) throw new Error("La respuesta de la mesa no es válida.");
+  return parsed.data as ApiResponse<Path>;
 }
 function newCommandId() {
   const bytes = crypto.getRandomValues(new Uint8Array(16));
@@ -34,23 +57,37 @@ export function saveSession(session: Session) {
   localStorage.setItem("umbral.lastSession", JSON.stringify(session));
 }
 export function loadSession() {
-  try {
-    return JSON.parse(
-      sessionStorage.getItem("umbral.session") ??
-        localStorage.getItem("umbral.lastSession") ??
-        "null",
-    ) as Session | null;
-  } catch {
-    return null;
+  for (const saved of [
+    sessionStorage.getItem("umbral.session"),
+    localStorage.getItem("umbral.lastSession"),
+  ]) {
+    if (!saved) continue;
+    try {
+      const parsed = sessionSchema.safeParse(JSON.parse(saved));
+      if (parsed.success) return parsed.data;
+    } catch {
+      // Try the other saved session.
+    }
   }
+  return null;
 }
 export function useCampaign(session: Session | null) {
   const [game, setGame] = useState<GameView | null>(null),
     [connected, setConnected] = useState(false),
     [error, setError] = useState(""),
     [pending, setPending] = useState<Command | null>(null);
-  const [animating,setAnimating]=useState(false);
-  useEffect(()=>{const remaining=game ? Math.max(0,game.animationUntil-game.serverNow) : 0;setAnimating(remaining>0);const timer=setTimeout(()=>setAnimating(false),remaining);return ()=>clearTimeout(timer);},[game?.animationUntil,game?.serverNow]);
+  const [animating, setAnimating] = useState(false);
+  useEffect(() => {
+    const remaining = game
+      ? Math.max(0, game.animationUntil - game.serverNow)
+      : 0;
+    setAnimating(!!game?.animationPending || remaining > 0);
+    const timer = setTimeout(
+      () => setAnimating(!!game?.animationPending),
+      remaining,
+    );
+    return () => clearTimeout(timer);
+  }, [game?.animationUntil, game?.serverNow, game?.animationPending]);
   const room = useRef<Room | null>(null),
     gameRef = useRef<GameView | null>(null),
     pendingRef = useRef<Command | null>(null);
@@ -61,20 +98,20 @@ export function useCampaign(session: Session | null) {
       timer: ReturnType<typeof setTimeout> | undefined,
       current: Room | undefined;
     try {
-      pendingRef.current = JSON.parse(
+      const saved: unknown = JSON.parse(
         sessionStorage.getItem(storageKey) ?? "null",
       );
+      const parsed = commandSchema.safeParse(saved);
+      pendingRef.current = parsed.success ? parsed.data : null;
+      if (!parsed.success) sessionStorage.removeItem(storageKey);
       setPending(pendingRef.current);
     } catch {
       pendingRef.current = null;
+      sessionStorage.removeItem(storageKey);
     }
     const connect = async () => {
       try {
-        const { roomId } = await api<{ roomId: string }>(
-          "connect",
-          {},
-          session.token,
-        );
+        const { roomId } = await api("connect", {}, session.token);
         if (disposed) return;
         const joined = await new Client(`${location.origin}/realtime`).joinById(
           roomId,
@@ -90,13 +127,25 @@ export function useCampaign(session: Session | null) {
         room.current = joined;
         setConnected(true);
         setError("");
-        joined.onMessage("state", (state: GameView) => {
+        joined.onMessage("state", (input: unknown) => {
+          const parsed = gameViewSchema.safeParse(input);
+          if (!parsed.success) {
+            setError("El estado recibido de la mesa no es válido.");
+            return;
+          }
+          const state = parsed.data;
           if (!gameRef.current || state.revision >= gameRef.current.revision) {
             gameRef.current = state;
             setGame(state);
           }
         });
-        joined.onMessage("receipt", (receipt: Receipt) => {
+        joined.onMessage("receipt", (input: unknown) => {
+          const parsed = receiptSchema.safeParse(input);
+          if (!parsed.success) {
+            setError("El recibo recibido de la mesa no es válido.");
+            return;
+          }
+          const receipt = parsed.data;
           if (pendingRef.current?.commandId === receipt.commandId) {
             pendingRef.current = null;
             setPending(null);
@@ -104,19 +153,25 @@ export function useCampaign(session: Session | null) {
           }
           setError("");
         });
-        joined.onMessage(
-          "failure",
-          (failure: { code: string; message: string }) => {
-            setError(failure.message);
-            if (failure.code !== "STORAGE_UNAVAILABLE") {
-              pendingRef.current = null;
-              setPending(null);
-              sessionStorage.removeItem(storageKey);
-            }
-            joined.send("sync");
-          },
-        );
-        joined.onMessage("storage-error", (failure: { message: string }) => {
+        joined.onMessage("failure", (input: unknown) => {
+          const parsed = failureSchema.safeParse(input);
+          if (!parsed.success) {
+            setError("La respuesta de la mesa no es válida.");
+            return;
+          }
+          const failure = parsed.data;
+          setError(failure.message);
+          if (failure.code !== "STORAGE_UNAVAILABLE") {
+            pendingRef.current = null;
+            setPending(null);
+            sessionStorage.removeItem(storageKey);
+          }
+          joined.send("sync");
+        });
+        joined.onMessage("storage-error", (input: unknown) => {
+          const parsed = storageErrorSchema.safeParse(input);
+          if (!parsed.success) return;
+          const failure = parsed.data;
           setError(failure.message);
           setGame((previous) =>
             previous ? { ...previous, storageError: true } : null,
@@ -161,7 +216,8 @@ export function useCampaign(session: Session | null) {
     };
   }, [session?.token]);
   function command(action: Command["action"]) {
-    if (!room.current || !gameRef.current || pendingRef.current || animating) return;
+    if (!room.current || !gameRef.current || pendingRef.current || animating)
+      return;
     const next: Command = {
       commandId: newCommandId(),
       expectedRevision: gameRef.current.revision,
@@ -180,6 +236,8 @@ export function useCampaign(session: Session | null) {
     }
   }
   return {
+    animationComplete: (revision: number) =>
+      room.current?.send("animation-complete", revision),
     animating,
     game,
     connected,

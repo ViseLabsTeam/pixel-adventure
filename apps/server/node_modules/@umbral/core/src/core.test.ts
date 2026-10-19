@@ -40,6 +40,11 @@ describe("turnos y movimiento", () => {
       next = roll(game);
     expect(game.movementRoll).toBeNull();
     expect(next.movementLeft).toBe(4);
+    expect(next.events.at(-1)).toMatchObject({
+      kind: "DICE",
+      actorId: "one",
+      dice: [6],
+    });
     expect(() => roll(next)).toThrow("ya se resolvió");
   });
   it("rechaza diagonales en el protocolo", () =>
@@ -55,7 +60,7 @@ describe("turnos y movimiento", () => {
       { x: 3, y: 8 },
       { x: 4, y: 3 },
       { x: 3, y: 5 },
-      { x: 10, y: 8 },
+      { x: 40, y: 8 },
     ]) {
       const game = roll(setup());
       game.players[0].x = point.x - 1;
@@ -99,6 +104,30 @@ describe("turnos y movimiento", () => {
       ),
     ).toThrow("No hay movimiento");
   });
+  it("permite explorar fuera de la vista inicial y bloquea el vacío del PNG", () => {
+    const game = roll(setup());
+    game.players[0].x = 9;
+    game.players[0].y = 8;
+    const explored = resolve(
+      game,
+      "one",
+      { type: "MOVE_STEP", direction: "RIGHT" },
+      prototype,
+      () => 1,
+    );
+    expect(explored.players[0].x).toBe(10);
+    explored.players[0].x = -19;
+    explored.players[0].y = 0;
+    expect(() =>
+      resolve(
+        explored,
+        "one",
+        { type: "MOVE_STEP", direction: "LEFT" },
+        prototype,
+        () => 1,
+      ),
+    ).toThrow("bloqueada");
+  });
   it("cerrar movimiento bloquea desplazamiento", () => {
     const game = resolve(
       roll(setup()),
@@ -117,13 +146,21 @@ describe("turnos y movimiento", () => {
       ),
     ).toThrow("No hay movimiento");
   });
-  it("no ofrece arquera y limita la mesa a cuatro personajes", () => {
-    expect(classSchema.safeParse("archer").success).toBe(false);
+  it("ofrece cuatro clases únicas, incluida la arquera", () => {
+    expect(classSchema.safeParse("archer").success).toBe(true);
     let game = createGame("c", "ABC234", prototype);
-    for (let i = 0; i < 4; i++)
-      game = addPlayer(game, String(i), "Viajero", "paladin", prototype);
-    expect(() => addPlayer(game, "5", "Extra", "mage", prototype)).toThrow(
-      "cuatro",
+    game = addPlayer(game, "1", "Ada", "paladin", prototype);
+    expect(() => addPlayer(game, "2", "Bea", "paladin", prototype)).toThrow(
+      "ya fue elegido",
+    );
+    game = addPlayer(game, "2", "Bea", "warrior", prototype);
+    game = addPlayer(game, "3", "Cira", "mage", prototype);
+    game = addPlayer(game, "4", "Dante", "archer", prototype);
+    expect(game.players).toHaveLength(4);
+    expect(game.players[3].stats.range).toBe(3);
+    expect(game.players[3].hp).toBeLessThan(game.players[1].hp);
+    expect(() => addPlayer(game, "4", "Dante", "warrior", prototype)).toThrow(
+      "ya fue elegido",
     );
   });
 });
@@ -255,6 +292,7 @@ describe("combate e inventario", () => {
   it("abre cada cofre una vez al limpiar y conserva identificadores", () => {
     const game = setup();
     game.enemies[1].hp = 0;
+    game.enemies[2].hp = 0;
     game.enemies[0].hp = 1;
     game.players[0].x = 3;
     game.players[0].y = 6;
@@ -357,7 +395,7 @@ describe("recursos de clase de demo", () => {
     ).toThrow();
   });
   it("mantiene las identidades de clase", () => {
-    const { paladin, warrior, mage } = prototype.classes;
+    const { paladin, warrior, mage, archer } = prototype.classes;
     expect(paladin.maxHp).toBeGreaterThan(warrior.maxHp);
     expect(warrior.maxHp).toBeGreaterThan(mage.maxHp);
     expect(paladin.defense).toBeGreaterThan(warrior.defense);
@@ -365,5 +403,8 @@ describe("recursos de clase de demo", () => {
     expect(mage.damageMultiplier).toBeGreaterThan(warrior.damageMultiplier);
     expect(warrior.damageMultiplier).toBeGreaterThan(paladin.damageMultiplier);
     expect(mage.range).toBe(2);
+    expect(archer.range).toBe(3);
+    expect(archer.maxHp).toBeLessThan(warrior.maxHp);
+    expect(archer.damageMultiplier).toBeGreaterThan(warrior.damageMultiplier);
   });
 });

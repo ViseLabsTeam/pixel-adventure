@@ -1,6 +1,7 @@
 import { z } from "zod";
 const integer = z.number().int().nonnegative();
-const point = { x: integer, y: integer };
+const coordinate = z.number().int();
+const point = { x: coordinate, y: coordinate };
 const slot = z.enum(["helmet", "gloves", "pants", "chest"]);
 const stats = z.object({
   maxHp: integer.positive(),
@@ -18,6 +19,7 @@ export const saveSchema = z.object({
   code: z.string(),
   revision: integer,
   animationUntil: integer.optional(),
+  animationPending: z.boolean().optional(),
   saveSchemaVersion: z.literal(2),
   rulesVersion: z.literal("0.5-demo"),
   contentVersion: z.string(),
@@ -33,7 +35,7 @@ export const saveSchema = z.object({
       z.object({
         id: z.string(),
         name: z.string(),
-        classId: z.enum(["paladin", "warrior", "mage"]),
+        classId: z.enum(["paladin", "warrior", "mage", "archer"]),
         slot: integer.max(3),
         hp: integer,
         resource: integer.max(300),
@@ -52,6 +54,7 @@ export const saveSchema = z.object({
   enemies: z.array(
     z.object({
       id: z.string(),
+      archetypeId: z.string().optional(),
       name: z.string(),
       hp: integer,
       maxHp: integer.positive(),
@@ -97,6 +100,8 @@ export const saveSchema = z.object({
     }),
   ),
   map: z.object({
+    minX: coordinate,
+    minY: coordinate,
     width: integer.positive(),
     height: integer.positive(),
     walls: z.array(z.object(point)),

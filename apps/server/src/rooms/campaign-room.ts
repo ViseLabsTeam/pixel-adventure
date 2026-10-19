@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { Room, type Client } from "@colyseus/core";
 import {
   authenticate,
+  finishAnimation,
   execute,
   readGame,
   projectView,
@@ -33,6 +34,26 @@ export class CampaignRoom extends Room {
     activeRooms.set(this.campaignId, this.roomId);
     updates.on(this.campaignId, this.changed);
     this.onMessage("sync", () => this.refresh());
+    this.onMessage("animation-complete", async (client, revision: unknown) => {
+      if (
+        typeof revision !== "number" ||
+        !Number.isSafeInteger(revision) ||
+        revision < 0
+      )
+        return;
+      try {
+        await finishAnimation(
+          this.credentials.get(client.sessionId) ?? "",
+          revision,
+        );
+      } catch (error) {
+        if (!(error instanceof RuleError))
+          client.send("storage-error", {
+            message:
+              "No se pudo confirmar el fin de la animación. Reintentá la sincronización.",
+          });
+      }
+    });
     this.onMessage("select", async (client, payload: unknown) => {
       try {
         const auth = await authenticate(
@@ -59,8 +80,8 @@ export class CampaignRoom extends Room {
           this.onlineIds(),
         );
         this.storageError = false;
+        await this.refreshChain;
         client.send("receipt", receipt);
-        await this.refresh();
       } catch (error) {
         const known = error instanceof RuleError || error instanceof ZodError;
         if (!known) {

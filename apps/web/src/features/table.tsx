@@ -1,10 +1,12 @@
 import { lazy, Suspense, useState } from "react";
 import { classes, guide } from "@umbral/content";
-import type { Session } from "@umbral/protocol";
+import type { GameView, Session } from "@umbral/protocol";
 import { Health, type Preferences, CopyButton } from "../ui/shared";
 import { ResourceBar } from "../ui/resource-bar";
 import { Recovery } from "./recovery";
 import type { CampaignConnection } from "../connection/use-campaign";
+import { useImpactPresentation } from "../ui/use-impact-presentation";
+import { TableDiceSpotlight } from "./table-dice-spotlight";
 const GameBoard = lazy(() => import("../board/game-board"));
 export function Table({
   connection,
@@ -17,7 +19,19 @@ export function Table({
 }) {
   const { game } = connection;
   const [showLog, setShowLog] = useState(true);
+  const { prior, resultHidden, attackInFlight } = useImpactPresentation(game);
   if (!game) return null;
+  const movementRolling = Boolean(
+    game.animationPending &&
+      prior &&
+      game.events.some(
+        (event) =>
+          event.kind === "DICE" &&
+          !prior.events.some((old) => old.id === event.id),
+      ),
+  );
+  const visibleEvents =
+    (resultHidden || movementRolling) && prior ? prior.events : game.events;
   const active = game.players.find((p) => p.id === game.activePlayerId);
   return (
     <main className="table-view">
@@ -60,9 +74,21 @@ export function Table({
                         : classes[player.classId].name}
                   </span>
                 </h3>
-                <Health hp={player.hp} max={player.stats.maxHp} />
+                <Health
+                  hp={
+                    attackInFlight && prior
+                      ? (prior.players.find((old) => old.id === player.id)
+                          ?.hp ?? player.hp)
+                      : player.hp
+                  }
+                  max={player.stats.maxHp}
+                />
                 <small>
-                  {player.hp} / {player.stats.maxHp} VIDA
+                  {attackInFlight && prior
+                    ? (prior.players.find((old) => old.id === player.id)?.hp ??
+                      player.hp)
+                    : player.hp}{" "}
+                  / {player.stats.maxHp} VIDA
                 </small>
                 <ResourceBar
                   classId={player.classId}
@@ -78,7 +104,7 @@ export function Table({
           <div>
             <span className="eyebrow">EL ANFITRIÓN</span>
             <p>
-              {connection.animating ? "ANIMACIÓN EN CURSO" : game.status === "WON"
+              {game.status === "WON"
                 ? "«Hay muchas puertas esperándolos.»"
                 : game.status === "LOST"
                   ? "«Quizás la próxima historia sea distinta.»"
@@ -99,7 +125,7 @@ export function Table({
           </div>
           {showLog && (
             <ol className="event-log">
-              {game.events
+              {visibleEvents
                 .slice(-5)
                 .reverse()
                 .map((event) => (
@@ -147,18 +173,31 @@ export function Table({
                   : "TURNO DE " + active?.name.toUpperCase()}
           </span>
           <span>
-            {connection.animating ? "ESPERANDO A QUE TERMINE" : game.actionUsed
-              ? "ACCIÓN REALIZADA"
-              : game.phase === "MOVEMENT"
-                ? "MOVIMIENTO · " + game.movementLeft + " CASILLAS"
-                : "FASE DE ACCIÓN"}
+            {movementRolling
+              ? "DADOS GIRANDO"
+              : connection.animating
+                ? "ESPERANDO A QUE TERMINE"
+                : game.actionUsed
+                  ? "ACCIÓN REALIZADA"
+                  : game.phase === "MOVEMENT"
+                    ? "MOVIMIENTO · " + game.movementLeft + " CASILLAS"
+                    : "FASE DE ACCIÓN"}
           </span>
         </div>
         <Suspense
           fallback={<div className="loading">Desplegando el tablero…</div>}
         >
-          <GameBoard game={game} preferences={preferences} />
+          <GameBoard
+            game={game}
+            preferences={preferences}
+            onAnimationComplete={connection.animationComplete}
+          />
         </Suspense>
+        <TableDiceSpotlight
+          game={game}
+          resultHidden={resultHidden}
+          reducedMotion={preferences.reducedMotion}
+        />
         <div className="board-legend">
           <span>✦ Enemigo</span>
           <span>▰ Cofre</span>

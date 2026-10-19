@@ -1,6 +1,51 @@
 // Fixtures versionados. No representan el balance definitivo.
+import { courtyardTerrain } from "./courtyard-terrain";
+export const enemyRecipes = {
+  sentinel: {
+    name: "Centinela del umbral",
+    maxHp: 24,
+    defense: 2,
+    resistance: 1,
+    accuracy: 5,
+    dodge: 3,
+    agility: 2,
+    range: 1,
+    movement: 1,
+  },
+  wisp: {
+    name: "Eco errante",
+    maxHp: 18,
+    defense: 1,
+    resistance: 2,
+    accuracy: 4,
+    dodge: 3,
+    agility: 3,
+    range: 2,
+    movement: 1,
+  },
+  goblin: {
+    name: "Goblin de las ruinas",
+    maxHp: 20,
+    defense: 1,
+    resistance: 1,
+    accuracy: 5,
+    dodge: 4,
+    agility: 4,
+    range: 1,
+    movement: 1,
+  },
+} as const;
+export function spawnEnemy(
+  archetypeId: keyof typeof enemyRecipes,
+  x: number,
+  y: number,
+  id: string = archetypeId,
+) {
+  const recipe = enemyRecipes[archetypeId];
+  return { id, archetypeId, ...recipe, x, y, hp: recipe.maxHp };
+}
 export const prototype = {
-  version: "prototype-content-0.2.0",
+  version: "prototype-content-0.3.0",
   classes: {
     paladin: {
       maxHp: 60,
@@ -35,10 +80,24 @@ export const prototype = {
       damageType: "magic" as const,
       damageMultiplier: 1.35,
     },
+    archer: {
+      maxHp: 34,
+      accuracy: 9,
+      dodge: 6,
+      agility: 7,
+      defense: 1,
+      resistance: 2,
+      range: 3,
+      damageType: "physical" as const,
+      damageMultiplier: 1.2,
+    },
   },
   map: {
-    width: 10,
-    height: 10,
+    minX: -21,
+    minY: -21,
+    width: 58,
+    height: 70,
+    terrain: courtyardTerrain,
     walls: [
       { x: 4, y: 3 },
       { x: 4, y: 4 },
@@ -53,36 +112,9 @@ export const prototype = {
     ],
   },
   enemies: [
-    {
-      id: "sentinel",
-      name: "Centinela del umbral",
-      x: 3,
-      y: 5,
-      hp: 24,
-      maxHp: 24,
-      defense: 2,
-      resistance: 1,
-      accuracy: 5,
-      dodge: 3,
-      agility: 2,
-      range: 1,
-      movement: 1,
-    },
-    {
-      id: "wisp",
-      name: "Eco errante",
-      x: 7,
-      y: 4,
-      hp: 18,
-      maxHp: 18,
-      defense: 1,
-      resistance: 2,
-      accuracy: 4,
-      dodge: 3,
-      agility: 3,
-      range: 2,
-      movement: 1,
-    },
+    spawnEnemy("sentinel", 3, 5),
+    spawnEnemy("wisp", 7, 4),
+    spawnEnemy("goblin", 12, 6),
   ],
   chests: [
     { id: "chest-1", x: 2, y: 6, opened: false, itemDefinition: "iron-helmet" },

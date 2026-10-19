@@ -35,7 +35,7 @@ Estas instrucciones se aplican a todo el proyecto. Las indicaciones actuales del
 - Usar el [paladín](assets/paladin/README.md) como conjunto completo de referencia, por indicación del responsable. Comparar categorías visuales, no exigir nombres idénticos entre clases.
 - Distinguir archivos ausentes de recursos existentes pendientes de asignación. En el mago, los lanzamientos y `ice_storm.gif` no tienen aún un mapeo confirmado a básico, especial y ulti.
 - Conservar los originales. Separar fuentes, recursos derivados y manifiesto de integración.
-- Respetar la indicación **`caminata_S → −Y`**; el archivo recibido se llama exactamente `caminata_s.gif`. No deducir el resto de los ejes únicamente a partir de los nombres.
+- Respetar la corrección vigente del responsable: **`caminata_W.gif → arriba (−Y)`** y **`caminata_s.gif → abajo (+Y)`**. La reproducción de S dura lo mismo que W. Reflejar horizontalmente los sprites para mirar a izquierda/derecha; no deducir efectos de habilidades a partir de nombres.
 - Un nombre de animación no aprueba una habilidad, su costo ni su efecto. Usar placeholders explícitos cuando falten recursos necesarios para una prueba.
 
 ## Flujo de trabajo y verificación

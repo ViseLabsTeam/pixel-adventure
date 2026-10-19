@@ -9,7 +9,9 @@ COPY packages/protocol/package.json packages/protocol/package.json
 COPY packages/content/package.json packages/content/package.json
 RUN pnpm install --frozen-lockfile
 COPY . .
-RUN pnpm build
+# Derived assets are part of the build context; regenerate them with
+# `pnpm assets:prepare` whenever the source art changes.
+RUN pnpm typecheck && pnpm --filter @umbral/web build && node scripts/build-server.mjs
 
 FROM node:24-bookworm-slim AS server
 WORKDIR /app
@@ -29,5 +31,9 @@ COPY --from=build /app/apps/web/dist /usr/share/nginx/html
 COPY --from=build /app/assets/paladin/generated /usr/share/nginx/html/assets/paladin/generated
 COPY --from=build /app/assets/guerrero/generated /usr/share/nginx/html/assets/guerrero/generated
 COPY --from=build /app/assets/mago/generated /usr/share/nginx/html/assets/mago/generated
+COPY --from=build /app/assets/arquera/generated /usr/share/nginx/html/assets/arquera/generated
 COPY --from=build /app/assets/mapas/generated /usr/share/nginx/html/assets/mapas/generated
+COPY --from=build /app/assets/enemigos/goblin/generated /usr/share/nginx/html/assets/enemigos/goblin/generated
 COPY --from=build /app/assets/maestro /usr/share/nginx/html/assets/maestro
+COPY --from=build /app/assets/dados /usr/share/nginx/html/assets/dados
+COPY --from=build /app/assets/fuentes /usr/share/nginx/html/assets/fuentes

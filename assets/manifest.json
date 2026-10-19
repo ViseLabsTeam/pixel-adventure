@@ -1,5 +1,23 @@
 {
   "version": 1,
+  "fonts": {
+    "ui": {
+      "regular": "fuentes/pixel-operator/PixelOperator.ttf",
+      "bold": "fuentes/pixel-operator/PixelOperator-Bold.ttf",
+      "license": "fuentes/pixel-operator/LICENSE.txt"
+    }
+  },
+  "dice": {
+    "d6": {
+      "source": "dados/D6.gif",
+      "preview": "dados/generated/d6.png"
+    },
+    "d20": {
+      "source": "dados/D20.gif",
+      "preview": "dados/generated/d20.png"
+    },
+    "timings": "dados/generated/manifest.json"
+  },
   "characters": {
     "paladin": {
       "source": "paladin/animascion_pasiva.gif",
@@ -7,17 +25,31 @@
       "animation": "spritesheet-demo",
       "clips": "paladin/generated/animations.json"
     },
-    "guerrero": {
+    "warrior": {
       "source": "guerrero/indie.gif",
       "portrait": "guerrero/generated/portrait.png",
       "animation": "spritesheet-demo",
       "clips": "guerrero/generated/animations.json"
     },
-    "mago": {
+    "mage": {
       "source": "mago/bola_de_fuego_.gif",
       "portrait": "mago/generated/portrait.png",
       "animation": "spritesheet-demo",
       "clips": "mago/generated/animations.json"
+    },
+    "archer": {
+      "source": "arquera/basico_.gif",
+      "portrait": "arquera/generated/portrait.png",
+      "animation": "spritesheet-demo",
+      "clips": "arquera/generated/animations.json"
+    }
+  },
+  "enemies": {
+    "goblin": {
+      "source": "enemigos/goblin/Goblin_Enemy_32x32.gif",
+      "attackSource": "enemigos/goblin/Goblin_Enemy_32x32_attack.gif",
+      "portrait": "enemigos/goblin/generated/portrait.png",
+      "clips": "enemigos/goblin/generated/animations.json"
     }
   },
   "map": "mapas/generated/courtyard.webp"

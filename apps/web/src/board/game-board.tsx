@@ -1,15 +1,26 @@
 import { useEffect, useRef, useState } from "react";
 import Phaser from "phaser";
-import { classes } from "@umbral/content";
+import {
+  actorRecipes,
+  animationTimings,
+  classes,
+  combatPresentation,
+  diceTimings,
+  movementStepMs,
+} from "@umbral/content";
 import type { GameView } from "@umbral/protocol";
 import type { Preferences } from "../ui/shared";
-const categories = { paladin: "paladin", warrior: "guerrero", mage: "mago" };
-const actions = {
-  paladin: ["idle", "walk", "walkUp", "basic", "special", "ultimate"],
-  warrior: ["idle", "basic", "special", "ultimate"],
-  mage: ["walk", "basic", "special", "ultimate"],
+import { facingOriginX } from "./sprite-facing";
+const actorArt = { ...actorRecipes.players, ...actorRecipes.enemies };
+type ActorArtId = keyof typeof actorArt;
+type Clip = {
+  duration: number;
+  delays: number[];
+  count: number;
+  originX: number;
+  originY: number;
+  scale: number;
 };
-type Clip = { duration:number; delays:number[]; count: number; originX: number; originY: number; scale: number };
 const TILE = 70,
   OFFSET = 30;
 class Courtyard extends Phaser.Scene {
@@ -17,14 +28,186 @@ class Courtyard extends Phaser.Scene {
   preferences: Preferences;
   actors = new Map<string, Phaser.GameObjects.Container>();
   grid?: Phaser.GameObjects.Graphics;
+  highlights?: Phaser.GameObjects.Graphics;
   decor?: Phaser.GameObjects.Container;
+  private gridSignature = "";
+  private scenerySignature = "";
   ready = false;
   positions = new Map<string, { x: number; y: number }>();
+  displayedHp = new Map<string, number>();
+  displayedMaxHp = new Map<string, number>();
+  pendingImpacts = new Map<string, number>();
   seen = new Set<string>();
   initialized = false;
+  visualJobs = new Set<() => void>();
+  finishPresentation() {
+    if (this.visualJobs.size === 0 && this.snapshot.animationPending)
+      this.onAnimationComplete(this.snapshot.revision);
+  }
+  beginVisual() {
+    const done = () => {
+      if (!this.visualJobs.delete(done)) return;
+      this.finishPresentation();
+    };
+    this.visualJobs.add(done);
+    return done;
+  }
+  face(actor: Phaser.GameObjects.Container, fromX: number, targetX: number) {
+    if (fromX === targetX) return;
+    const sprite = actor.getByName(
+      "sprite",
+    ) as Phaser.GameObjects.Sprite | null;
+    if (sprite) {
+      const sourceOriginX = sprite.flipX ? 1 - sprite.originX : sprite.originX;
+      const facingLeft = targetX < fromX;
+      sprite
+        .setFlipX(facingLeft)
+        .setOrigin(facingOriginX(sourceOriginX, facingLeft), sprite.originY);
+    }
+    const marker = actor.getByName("facing") as Phaser.GameObjects.Text | null;
+    marker?.setText(targetX < fromX ? "◀" : "▶");
+  }
+  moveCamera(x: number, y: number, duration = 0) {
+    const camera = this.cameras.main;
+    const { width, height } = camera;
+    const centerX = OFFSET + x * TILE + TILE / 2;
+    const centerY = OFFSET + y * TILE + TILE / 2;
+    const margin = Math.min(90, width / 4, height / 4);
+    const nextX = Phaser.Math.Clamp(
+      centerX < camera.scrollX + margin
+        ? centerX - margin
+        : centerX > camera.scrollX + width - margin
+          ? centerX - width + margin
+          : camera.scrollX,
+      OFFSET + this.snapshot.map.minX * TILE,
+      OFFSET +
+        (this.snapshot.map.minX + this.snapshot.map.width) * TILE -
+        width,
+    );
+    const nextY = Phaser.Math.Clamp(
+      centerY < camera.scrollY + margin
+        ? centerY - margin
+        : centerY > camera.scrollY + height - margin
+          ? centerY - height + margin
+          : camera.scrollY,
+      OFFSET + this.snapshot.map.minY * TILE,
+      OFFSET +
+        (this.snapshot.map.minY + this.snapshot.map.height) * TILE -
+        height,
+    );
+    this.tweens.killTweensOf(camera);
+    if (duration && !this.preferences.reducedMotion)
+      this.tweens.add({
+        targets: camera,
+        scrollX: nextX,
+        scrollY: nextY,
+        duration,
+      });
+    else camera.setScroll(nextX, nextY);
+  }
+  drawHealth(
+    actor: Phaser.GameObjects.Container,
+    entity: GameView["players"][number] | GameView["enemies"][number],
+    hp: number,
+  ) {
+    const player = "classId" in entity;
+    let health = actor.getByName(
+      "health",
+    ) as Phaser.GameObjects.Graphics | null;
+    if (!health) {
+      health = this.add.graphics().setName("health");
+      actor.add(health);
+    }
+    health.clear();
+    const healthY = player ? (entity.classId === "paladin" ? -96 : -89) : -48;
+    const max = player ? entity.stats.maxHp : entity.maxHp;
+    health.fillStyle(0x101915, 0.95).fillRoundedRect(-24, healthY, 48, 5, 2);
+    health
+      .fillStyle(player ? 0x7eb99b : 0xd67b6e)
+      .fillRoundedRect(-24, healthY, 48 * Math.max(0, hp / max), 5, 2);
+  }
+  showImpact(
+    event: GameView["events"][number],
+    target: Phaser.GameObjects.Container,
+    entity: GameView["players"][number] | GameView["enemies"][number],
+    hp: number,
+  ) {
+    const finishHealth = () => {
+      this.displayedHp.set(entity.id, hp);
+      this.drawHealth(target, entity, hp);
+      target.setAlpha(hp <= 0 ? 0.25 : 1);
+      const remaining = (this.pendingImpacts.get(entity.id) ?? 1) - 1;
+      if (remaining > 0) this.pendingImpacts.set(entity.id, remaining);
+      else this.pendingImpacts.delete(entity.id);
+    };
+    if (this.preferences.reducedMotion) {
+      finishHealth();
+      return;
+    }
+    const done = this.beginVisual();
+    const fx = this.add
+      .circle(
+        target.x,
+        target.y,
+        15,
+        event.ability === "ultimate" ? 0xffd261 : 0xa7def2,
+        0.7,
+      )
+      .setDepth(100);
+    this.tweens.add({
+      targets: fx,
+      scale: 2.5,
+      alpha: 0,
+      duration: 650,
+      onComplete: () => fx.destroy(),
+    });
+    const label = this.add
+      .text(
+        target.x,
+        target.y - 40,
+        event.kind === "MISS" ? "Fallo" : "-" + (event.amount ?? 0),
+        {
+          fontFamily: "Pixel Operator",
+          fontSize: "21px",
+          color: "#fff2cf",
+          stroke: "#241b15",
+          strokeThickness: 4,
+        },
+      )
+      .setOrigin(0.5)
+      .setDepth(101);
+    this.time.delayedCall(combatPresentation.resultMs, () => {
+      const current = this.displayedHp.get(entity.id) ?? hp;
+      if (current === hp) {
+        finishHealth();
+        return;
+      }
+      const meter = { value: current };
+      this.tweens.add({
+        targets: meter,
+        value: hp,
+        duration: combatPresentation.lingerMs,
+        onUpdate: () => {
+          this.displayedHp.set(entity.id, meter.value);
+          this.drawHealth(target, entity, meter.value);
+        },
+        onComplete: finishHealth,
+      });
+    });
+    this.tweens.add({
+      targets: label,
+      y: target.y - 85,
+      alpha: 0,
+      duration: combatPresentation.totalMs,
+      onComplete: () => {
+        label.destroy();
+        done();
+      },
+    });
+  }
   animate(
     actor: Phaser.GameObjects.Container,
-    classId: keyof typeof categories,
+    classId: ActorArtId,
     action: string,
   ) {
     const sprite = actor.getByName("sprite") as Phaser.GameObjects.Sprite;
@@ -41,11 +224,11 @@ class Courtyard extends Phaser.Scene {
     )
       return;
     sprite
-      .setOrigin(clip.originX, clip.originY)
+      .setOrigin(facingOriginX(clip.originX, sprite.flipX), clip.originY)
       .setScale(clip.scale)
       .play(classId + "-" + action);
   }
-  idle(actor: Phaser.GameObjects.Container, classId: keyof typeof categories) {
+  idle(actor: Phaser.GameObjects.Container, classId: ActorArtId) {
     if (
       classId === "mage" ||
       this.preferences.reducedMotion ||
@@ -53,7 +236,7 @@ class Courtyard extends Phaser.Scene {
     ) {
       const sprite = actor.getByName("sprite") as Phaser.GameObjects.Sprite;
       sprite.stop().setTexture(classId).setOrigin(0.5, 1);
-      const height=classId === "paladin" ? 112 : 105;
+      const height = actorArt[classId].height;
       sprite.setDisplaySize((sprite.width / sprite.height) * height, height);
     } else this.animate(actor, classId, "idle");
   }
@@ -61,6 +244,7 @@ class Courtyard extends Phaser.Scene {
     snapshot: GameView,
     preferences: Preferences,
     private report: (status: string) => void,
+    private onAnimationComplete: (revision: number) => void,
   ) {
     super("courtyard");
     this.snapshot = snapshot;
@@ -71,49 +255,67 @@ class Courtyard extends Phaser.Scene {
       this.report("No se pudieron cargar todos los gráficos."),
     );
     this.load.image("courtyard", "/assets/mapas/generated/courtyard.webp");
-    for (const [id, value] of Object.entries(classes)) {
-      this.load.image(id, value.portrait);
+    for (const id of Object.keys(actorArt) as ActorArtId[]) {
+      const recipe = actorArt[id];
+      if (id in classes)
+        this.load.image(id, classes[id as keyof typeof classes].portrait);
+      else
+        this.load.image(id, `/assets/${recipe.folder}/generated/portrait.png`);
       this.load.json(
         id + "-clips",
-        "/assets/" +
-          categories[id as keyof typeof categories] +
-          "/generated/animations.json",
+        `/assets/${recipe.folder}/generated/animations.json?v=full-frames-2`,
       );
-      for (const action of actions[id as keyof typeof actions])
+      for (const action of Object.keys(recipe.clips))
         this.load.spritesheet(
           id + "-" + action,
-          "/assets/" +
-            categories[id as keyof typeof categories] +
-            "/generated/" +
-            action +
-            ".png",
+          `/assets/${recipe.folder}/generated/${action}.png?v=full-frames-2`,
           { frameWidth: 256, frameHeight: 256 },
         );
     }
   }
   create() {
-    for (const id of Object.keys(categories) as (keyof typeof categories)[]) {
+    for (const id of Object.keys(actorArt) as ActorArtId[]) {
       const clips = this.cache.json.get(id + "-clips") as Record<string, Clip>;
       for (const [action, clip] of Object.entries(clips ?? {}))
         if (this.textures.exists(id + "-" + action))
           this.anims.create({
             key: id + "-" + action,
-            frames: this.anims.generateFrameNumbers(id + "-" + action, {
-              start: 0,
-              end: clip.count - 1,
-            }),
+            frames: Array.from({ length: clip.count }, (_, frame) => ({
+              key: id + "-" + action,
+              frame,
+              duration: Math.max(0, clip.delays[frame] - 1),
+            })),
             frameRate: 1000,
-          repeat: action === "idle" ? -1 : 0,
+            repeat: action === "idle" ? -1 : 0,
           });
     }
     if (this.textures.exists("courtyard"))
       this.add
-        .image(380, 380, "courtyard")
-        .setDisplaySize(760, 760)
-        .setAlpha(0.63);
-    this.add.rectangle(380, 380, 760, 760, 0x0c1714, 0.16);
+        .image(
+          OFFSET - 494 * (TILE / 16),
+          OFFSET - 366 * (TILE / 16),
+          "courtyard",
+        )
+        .setOrigin(0, 0)
+        .setScale(TILE / 16)
+        .setAlpha(0.85);
+    this.add.rectangle(
+      OFFSET + (this.snapshot.map.minX + this.snapshot.map.width / 2) * TILE,
+      OFFSET + (this.snapshot.map.minY + this.snapshot.map.height / 2) * TILE,
+      this.snapshot.map.width * TILE,
+      this.snapshot.map.height * TILE,
+      0x0c1714,
+      0.16,
+    );
     this.grid = this.add.graphics();
+    this.highlights = this.add.graphics();
     this.decor = this.add.container(0, 0);
+    this.cameras.main.setBounds(
+      OFFSET + this.snapshot.map.minX * TILE,
+      OFFSET + this.snapshot.map.minY * TILE,
+      this.snapshot.map.width * TILE,
+      this.snapshot.map.height * TILE,
+    );
     this.ready = true;
     this.paint(this.snapshot);
     this.report(
@@ -125,92 +327,118 @@ class Courtyard extends Phaser.Scene {
   paint(state: GameView) {
     this.snapshot = state;
     if (!this.ready) return;
+    if (this.preferences.reducedMotion)
+      for (const done of this.visualJobs) done();
     const grid = this.grid!;
-    grid.clear();
-    if (this.preferences.grid) {
-      grid.lineStyle(1, 0xd2ddbb, 0.21);
-      for (let x = 0; x <= 10; x++) {
-        grid.lineBetween(
-          OFFSET + x * TILE,
-          OFFSET,
-          OFFSET + x * TILE,
-          OFFSET + 10 * TILE,
+    const gridSignature = `${this.preferences.grid}:${state.map.minX}:${state.map.minY}:${state.map.width}:${state.map.height}`;
+    if (gridSignature !== this.gridSignature) {
+      this.gridSignature = gridSignature;
+      grid.clear();
+      if (this.preferences.grid) {
+        grid.lineStyle(1, 0xd2ddbb, 0.21);
+        for (
+          let x = state.map.minX;
+          x <= state.map.minX + state.map.width;
+          x++
+        ) {
+          grid.lineBetween(
+            OFFSET + x * TILE,
+            OFFSET + state.map.minY * TILE,
+            OFFSET + x * TILE,
+            OFFSET + (state.map.minY + state.map.height) * TILE,
+          );
+        }
+        for (
+          let y = state.map.minY;
+          y <= state.map.minY + state.map.height;
+          y++
+        ) {
+          grid.lineBetween(
+            OFFSET + state.map.minX * TILE,
+            OFFSET + y * TILE,
+            OFFSET + (state.map.minX + state.map.width) * TILE,
+            OFFSET + y * TILE,
+          );
+        }
+      }
+    }
+    const highlights = this.highlights!;
+    highlights.clear();
+    const scenerySignature = JSON.stringify([
+      state.map.walls,
+      state.chests,
+      state.zones,
+    ]);
+    if (scenerySignature !== this.scenerySignature) {
+      this.scenerySignature = scenerySignature;
+      this.decor!.removeAll(true);
+      const label = (x: number, y: number, text: string, color = "#f5df9b") =>
+        this.decor!.add(
+          this.add
+            .text(OFFSET + x * TILE + 35, OFFSET + y * TILE + 35, text, {
+              fontFamily: "Pixel Operator",
+              fontSize: "29px",
+              color,
+              stroke: "#102018",
+              strokeThickness: 3,
+            })
+            .setOrigin(0.5),
         );
-        grid.lineBetween(
-          OFFSET,
-          OFFSET + x * TILE,
-          OFFSET + 10 * TILE,
-          OFFSET + x * TILE,
+      for (const wall of state.map.walls) {
+        const g = this.add.graphics();
+        g.fillStyle(0x253830, 0.96).fillRoundedRect(
+          OFFSET + wall.x * TILE + 4,
+          OFFSET + wall.y * TILE + 4,
+          62,
+          62,
+          5,
+        );
+        g.lineStyle(2, 0x83917c, 0.55).strokeRoundedRect(
+          OFFSET + wall.x * TILE + 4,
+          OFFSET + wall.y * TILE + 4,
+          62,
+          62,
+          5,
+        );
+        this.decor!.add(g);
+        label(wall.x, wall.y, "▰", "#8a9985");
+      }
+      for (const chest of state.chests) {
+        const x = OFFSET + chest.x * TILE + 35,
+          y = OFFSET + chest.y * TILE + 35,
+          g = this.add.graphics();
+        g.fillStyle(chest.opened ? 0x625338 : 0xb68b43).fillRoundedRect(
+          x - 19,
+          y - 13,
+          38,
+          28,
+          3,
+        );
+        g.lineStyle(3, 0xead08a).lineBetween(x - 19, y - 2, x + 19, y - 2);
+        g.fillStyle(0x202b20).fillRect(x - 3, y - 4, 6, 10);
+        this.decor!.add(g);
+      }
+      for (const zone of state.zones) {
+        const x = OFFSET + zone.x * TILE + 35,
+          y = OFFSET + zone.y * TILE + 35,
+          g = this.add.graphics();
+        g.lineStyle(
+          2,
+          zone.kind === "exit" ? 0xddc982 : 0x77cab4,
+          0.9,
+        ).strokeCircle(x, y, 23);
+        this.decor!.add(g);
+        label(
+          zone.x,
+          zone.y,
+          zone.kind === "exit" ? "◇" : "✧",
+          zone.kind === "exit" ? "#ead794" : "#8ee3d0",
         );
       }
     }
-    this.decor!.removeAll(true);
-    const label = (x: number, y: number, text: string, color = "#f5df9b") =>
-      this.decor!.add(
-        this.add
-          .text(OFFSET + x * TILE + 35, OFFSET + y * TILE + 35, text, {
-            fontFamily: "Georgia",
-            fontSize: "29px",
-            color,
-            stroke: "#102018",
-            strokeThickness: 3,
-          })
-          .setOrigin(0.5),
-      );
-    for (const wall of state.map.walls) {
-      const g = this.add.graphics();
-      g.fillStyle(0x253830, 0.96).fillRoundedRect(
-        OFFSET + wall.x * TILE + 4,
-        OFFSET + wall.y * TILE + 4,
-        62,
-        62,
-        5,
-      );
-      g.lineStyle(2, 0x83917c, 0.55).strokeRoundedRect(
-        OFFSET + wall.x * TILE + 4,
-        OFFSET + wall.y * TILE + 4,
-        62,
-        62,
-        5,
-      );
-      this.decor!.add(g);
-      label(wall.x, wall.y, "▰", "#8a9985");
-    }
-    for (const chest of state.chests) {
-      const x = OFFSET + chest.x * TILE + 35,
-        y = OFFSET + chest.y * TILE + 35,
-        g = this.add.graphics();
-      g.fillStyle(chest.opened ? 0x625338 : 0xb68b43).fillRoundedRect(
-        x - 19,
-        y - 13,
-        38,
-        28,
-        3,
-      );
-      g.lineStyle(3, 0xead08a).lineBetween(x - 19, y - 2, x + 19, y - 2);
-      g.fillStyle(0x202b20).fillRect(x - 3, y - 4, 6, 10);
-      this.decor!.add(g);
-    }
-    for (const zone of state.zones) {
-      const x = OFFSET + zone.x * TILE + 35,
-        y = OFFSET + zone.y * TILE + 35,
-        g = this.add.graphics();
-      g.lineStyle(
-        2,
-        zone.kind === "exit" ? 0xddc982 : 0x77cab4,
-        0.9,
-      ).strokeCircle(x, y, 23);
-      this.decor!.add(g);
-      label(
-        zone.x,
-        zone.y,
-        zone.kind === "exit" ? "◇" : "✧",
-        zone.kind === "exit" ? "#ead794" : "#8ee3d0",
-      );
-    }
     const active = state.players.find((p) => p.id === state.activePlayerId);
     if (active) {
-      grid
+      highlights
         .lineStyle(3, 0xf1d48d, 1)
         .strokeRoundedRect(
           OFFSET + active.x * TILE + 2,
@@ -221,6 +449,23 @@ class Courtyard extends Phaser.Scene {
         );
     }
     const visible = new Set<string>();
+    const freshImpacts = state.events.filter(
+      (event) =>
+        !this.seen.has(event.id) &&
+        this.initialized &&
+        event.actorId &&
+        event.targetId,
+    );
+    for (const event of freshImpacts) {
+      const targetId = event.targetId;
+      if (!targetId) continue;
+      this.pendingImpacts.set(
+        targetId,
+        (this.pendingImpacts.get(targetId) ?? 0) + 1,
+      );
+    }
+    const movementDurations = new Map<string, number>();
+    let cameraDuration = 0;
     for (const entity of [...state.players, ...state.enemies]) {
       visible.add(entity.id);
       const player = "classId" in entity;
@@ -232,10 +477,22 @@ class Courtyard extends Phaser.Scene {
             .sprite(0, 25, entity.classId)
             .setName("sprite")
             .setOrigin(0.5, 1);
-          const height=entity.classId === "paladin" ? 112 : 105;
-          image.setDisplaySize((image.width / image.height) * height,height);
+          const height = actorArt[entity.classId].height;
+          image.setDisplaySize((image.width / image.height) * height, height);
           actor.add(image);
           this.idle(actor, entity.classId);
+        } else if (
+          entity.archetypeId in actorRecipes.enemies &&
+          this.textures.exists(entity.archetypeId)
+        ) {
+          const image = this.add
+            .sprite(0, 25, entity.archetypeId)
+            .setName("sprite");
+          actor.add(image);
+          this.idle(
+            actor,
+            entity.archetypeId as keyof typeof actorRecipes.enemies,
+          );
         } else {
           const body = this.add.graphics();
           body.fillStyle(0x943e43).fillCircle(0, -5, 19);
@@ -246,12 +503,18 @@ class Courtyard extends Phaser.Scene {
               .text(0, -5, "✦", { fontSize: "25px", color: "#ffe3ca" })
               .setOrigin(0.5),
           );
+          actor.add(
+            this.add
+              .text(0, 12, "▶", { fontSize: "12px", color: "#ffe3ca" })
+              .setName("facing")
+              .setOrigin(0.5),
+          );
         }
         actor.add(
           this.add
             .text(0, 34, player ? entity.name : entity.name.split(" ")[0], {
-              fontFamily: "Arial",
-              fontSize: "11px",
+              fontFamily: "Pixel Operator",
+              fontSize: "16px",
               color: "#fff8dc",
               stroke: "#102018",
               strokeThickness: 3,
@@ -269,17 +532,38 @@ class Courtyard extends Phaser.Scene {
       const previous = this.positions.get(entity.id);
       this.positions.set(entity.id, { x: entity.x, y: entity.y });
       if (previous && (previous.x !== entity.x || previous.y !== entity.y)) {
-        if (player)
-          this.animate(
-            actor,
-            entity.classId,
-            entity.classId === "paladin" && entity.y < previous.y
-              ? "walkUp"
-              : "walk",
-          );
+        const clips = player ? actorArt[entity.classId].clips : null;
+        const walkAction =
+          player && entity.y < previous.y && clips && "walkUp" in clips
+            ? "walkUp"
+            : player && entity.y > previous.y && clips && "walkDown" in clips
+              ? "walkDown"
+              : player && clips && "walk" in clips
+                ? "walk"
+                : "idle";
+        const moveDuration = movementStepMs;
+        movementDurations.set(entity.id, moveDuration);
+        if (entity.id === state.activePlayerId) cameraDuration = moveDuration;
+        this.face(actor, previous.x, entity.x);
+        if (player) {
+          this.animate(actor, entity.classId, walkAction);
+          const sprite = actor.getByName("sprite") as Phaser.GameObjects.Sprite;
+          if (
+            walkAction !== "idle" &&
+            sprite.anims.isPlaying &&
+            sprite.anims.currentAnim?.key === entity.classId + "-" + walkAction
+          ) {
+            const clipDone = this.beginVisual();
+            sprite.once("animationcomplete", () => {
+              this.idle(actor!, entity.classId);
+              clipDone();
+            });
+          }
+        }
         if (
           player &&
           entity.classId === "warrior" &&
+          walkAction === "idle" &&
           !this.preferences.reducedMotion
         ) {
           const sprite = actor.getByName("sprite");
@@ -287,32 +571,35 @@ class Courtyard extends Phaser.Scene {
           this.tweens.add({
             targets: sprite,
             y: 19,
-            duration: 95,
+            duration: 200,
             yoyo: true,
-            repeat: 1,
+            repeat: 4,
             onComplete: () => {
               (sprite as Phaser.GameObjects.Sprite).y = 25;
             },
           });
         }
         this.tweens.killTweensOf(actor);
+        const done = this.beginVisual();
         this.tweens.add({
           targets: actor,
           x,
           y,
-          duration: this.preferences.reducedMotion ? 0 : player ? ((this.cache.json.get(entity.classId+"-clips") as Record<string,Clip> | undefined)?.[entity.classId==="paladin" && entity.y<(previous?.y??entity.y)?"walkUp":"walk"]?.duration ?? 790) : 790,
+          duration: this.preferences.reducedMotion ? 0 : moveDuration,
           onComplete: () => {
+            done();
             if (player) {
               const sprite = actor!.getByName(
                 "sprite",
               ) as Phaser.GameObjects.Sprite;
               const key = sprite.anims.currentAnim?.key ?? "";
-              if (
-                !sprite.anims.isPlaying ||
-                key.endsWith("-idle") ||
-                key.includes("-walk")
-              )
+              if (!sprite.anims.isPlaying || key.endsWith("-idle"))
                 this.idle(actor!, entity.classId);
+            } else if (entity.archetypeId in actorRecipes.enemies) {
+              this.idle(
+                actor!,
+                entity.archetypeId as keyof typeof actorRecipes.enemies,
+              );
             }
           },
           ease: "Sine.easeOut",
@@ -320,97 +607,149 @@ class Courtyard extends Phaser.Scene {
       }
       if (player && this.preferences.reducedMotion)
         this.idle(actor, entity.classId);
-      actor.setAlpha(entity.hp <= 0 ? 0.25 : 1);
+      if (!(previous && (previous.x !== entity.x || previous.y !== entity.y))) {
+        const opponents = player ? state.enemies : state.players;
+        const nearest = opponents
+          .filter((opponent) => opponent.hp > 0 && opponent.x !== entity.x)
+          .sort(
+            (a, b) =>
+              (a.y === entity.y ? 0 : 100) +
+              Math.abs(a.x - entity.x) +
+              Math.abs(a.y - entity.y) -
+              ((b.y === entity.y ? 0 : 100) +
+                Math.abs(b.x - entity.x) +
+                Math.abs(b.y - entity.y)),
+          )[0];
+        if (nearest) this.face(actor, entity.x, nearest.x);
+      }
+      actor.setAlpha(
+        (this.pendingImpacts.has(entity.id)
+          ? (this.displayedHp.get(entity.id) ?? entity.hp)
+          : entity.hp) <= 0
+          ? 0.25
+          : 1,
+      );
       actor.setDepth(10 + entity.y);
-      const max = player ? entity.stats.maxHp : entity.maxHp;
-      (
-        actor.getByName("health") as Phaser.GameObjects.Graphics | null
-      )?.destroy();
-      const health = this.add.graphics().setName("health");
-      const healthY=player ? (entity.classId === "paladin" ? -96 : -89) : -48;
-      health.fillStyle(0x101915, 0.95).fillRoundedRect(-24, healthY, 48, 5, 2);
-      health
-        .fillStyle(player ? 0x7eb99b : 0xd67b6e)
-        .fillRoundedRect(-24, healthY, 48 * Math.max(0, entity.hp / max), 5, 2);
-      actor.add(health);
+      const shownHp = this.pendingImpacts.has(entity.id)
+        ? (this.displayedHp.get(entity.id) ?? entity.hp)
+        : entity.hp;
+      const previousHp = this.displayedHp.get(entity.id);
+      const maxHp = player ? entity.stats.maxHp : entity.maxHp;
+      const previousMaxHp = this.displayedMaxHp.get(entity.id);
+      this.displayedHp.set(entity.id, shownHp);
+      this.displayedMaxHp.set(entity.id, maxHp);
+      if (
+        previousHp !== shownHp ||
+        previousMaxHp !== maxHp ||
+        !actor.getByName("health")
+      )
+        this.drawHealth(actor, entity, shownHp);
       if (state.selectedTarget === entity.id) {
-        grid.lineStyle(2, 0xe88c7d, 0.95).strokeCircle(x, y, 29);
+        highlights.lineStyle(2, 0xe88c7d, 0.95).strokeCircle(x, y, 29);
       }
     }
+    if (active) this.moveCamera(active.x, active.y, cameraDuration);
+    const stagedHp = new Map<string, number>();
+    let attackDelay = movementDurations.size ? movementStepMs : 0;
     for (const event of state.events) {
       if (this.seen.has(event.id)) continue;
       this.seen.add(event.id);
-      if (
-        !this.initialized ||
-        !event.actorId ||
-        !event.targetId ||
-        this.preferences.reducedMotion
-      )
+      if (this.initialized && event.kind === "DICE") {
+        if (!this.preferences.reducedMotion) {
+          const done = this.beginVisual();
+          this.time.delayedCall(diceTimings.d6, done);
+        }
         continue;
+      }
+      if (!this.initialized || !event.actorId || !event.targetId) continue;
       const actor = this.actors.get(event.actorId),
         target = this.actors.get(event.targetId);
       const player = state.players.find((p) => p.id === event.actorId);
-      if (actor && player) {
-        this.animate(actor, player.classId, event.ability ?? "basic");
-        const sprite = actor.getByName("sprite") as Phaser.GameObjects.Sprite;
-        sprite.once("animationcomplete", () =>
-          this.idle(actor, player.classId),
-        );
-      }
-      if (target) {
-        const fx = this.add
-          .circle(
-            target.x,
-            target.y,
-            15,
-            event.ability === "ultimate" ? 0xffd261 : 0xa7def2,
-            0.7,
-          )
-          .setDepth(100);
-        this.tweens.add({
-          targets: fx,
-          scale: 2.5,
-          alpha: 0,
-          duration: 650,
-          onComplete: () => fx.destroy(),
+      const entity = [...state.players, ...state.enemies].find(
+        (item) => item.id === event.targetId,
+      );
+      if (!actor || !target || !entity) continue;
+      const beforeHp =
+        stagedHp.get(entity.id) ?? this.displayedHp.get(entity.id) ?? entity.hp;
+      const afterHp = Math.max(0, beforeHp - (event.amount ?? 0));
+      stagedHp.set(entity.id, afterHp);
+      const from = [...state.players, ...state.enemies].find(
+        (item) => item.id === event.actorId,
+      );
+      if (from) this.face(actor, from.x, entity.x);
+      const enemyArtId = state.enemies.find(
+        (enemy) => enemy.id === event.actorId,
+      )?.archetypeId;
+      const classId =
+        player?.classId ??
+        (enemyArtId && enemyArtId in actorRecipes.enemies
+          ? (enemyArtId as keyof typeof actorRecipes.enemies)
+          : null);
+      const startAttack = () => {
+        const show = () => this.showImpact(event, target, entity, afterHp);
+        const sprite = actor.getByName(
+          "sprite",
+        ) as Phaser.GameObjects.Sprite | null;
+        if (
+          classId &&
+          sprite &&
+          !this.preferences.reducedMotion &&
+          this.anims.exists(classId + "-" + (event.ability ?? "basic"))
+        ) {
+          const done = this.beginVisual();
+          sprite.once("animationcomplete", () => {
+            show();
+            this.idle(actor, classId);
+            done();
+          });
+          this.animate(actor, classId, event.ability ?? "basic");
+        } else if (!this.preferences.reducedMotion) {
+          const done = this.beginVisual();
+          this.time.delayedCall(1100, () => {
+            show();
+            done();
+          });
+        } else show();
+      };
+      const delay = attackDelay;
+      attackDelay +=
+        (classId && classId in actorRecipes.enemies
+          ? animationTimings[classId as keyof typeof actorRecipes.enemies].basic
+          : player
+            ? animationTimings[player.classId][event.ability ?? "basic"]
+            : 1100) + combatPresentation.totalMs;
+      if (delay && !this.preferences.reducedMotion) {
+        const done = this.beginVisual();
+        this.time.delayedCall(delay, () => {
+          startAttack();
+          done();
         });
-        const label = this.add
-          .text(
-            target.x,
-            target.y - 40,
-            event.amount ? "-" + event.amount : "Fallo",
-            {
-              fontSize: "21px",
-              color: "#fff2cf",
-              stroke: "#241b15",
-              strokeThickness: 4,
-            },
-          )
-          .setOrigin(0.5)
-          .setDepth(101);
-        this.tweens.add({
-          targets: label,
-          y: target.y - 85,
-          alpha: 0,
-          duration: 1100,
-          onComplete: () => label.destroy(),
-        });
-      }
+      } else startAttack();
     }
     this.initialized = true;
+    this.finishPresentation();
     for (const [id, actor] of this.actors)
       if (!visible.has(id)) {
         actor.destroy();
         this.actors.delete(id);
+        this.positions.delete(id);
+        this.displayedHp.delete(id);
+        this.displayedMaxHp.delete(id);
+        this.pendingImpacts.delete(id);
       }
+    const currentEvents = new Set(state.events.map((event) => event.id));
+    for (const id of this.seen)
+      if (!currentEvents.has(id)) this.seen.delete(id);
   }
 }
 export default function GameBoard({
   game,
   preferences,
+  onAnimationComplete,
 }: {
   game: GameView;
   preferences: Preferences;
+  onAnimationComplete: (revision: number) => void;
 }) {
   const [attempt, setAttempt] = useState(0);
   const [status, setStatus] = useState("loading");
@@ -420,26 +759,45 @@ export default function GameBoard({
     if (!host.current) return;
     setStatus("loading");
     let mounted = true;
-    const level = new Courtyard(game, preferences, (status) => {
-      if (mounted) setStatus(status);
-    });
+    const level = new Courtyard(
+      game,
+      preferences,
+      (status) => {
+        if (mounted) setStatus(status);
+      },
+      onAnimationComplete,
+    );
     scene.current = level;
     const engine = new Phaser.Game({
       type: Phaser.AUTO,
       parent: host.current,
-      width: 760,
-      height: 760,
+      width: host.current.clientWidth,
+      height: host.current.clientHeight,
       backgroundColor: "#101b16",
       pixelArt: true,
       scene: level,
-      scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+      scale: { mode: Phaser.Scale.RESIZE },
       audio: { noAudio: true },
     });
+    const observer = new ResizeObserver(([entry]) => {
+      if (!entry) return;
+      const width = Math.round(entry.contentRect.width);
+      const height = Math.round(entry.contentRect.height);
+      if (width && height) {
+        engine.scale.resize(width, height);
+        const active = level.snapshot.players.find(
+          (player) => player.id === level.snapshot.activePlayerId,
+        );
+        if (level.ready && active) level.moveCamera(active.x, active.y);
+      }
+    });
+    observer.observe(host.current);
     const timeout = window.setTimeout(() => {
       if (!level.ready) setStatus("El tablero está tardando en cargar.");
     }, 15000);
     return () => {
       mounted = false;
+      observer.disconnect();
       window.clearTimeout(timeout);
       engine.destroy(true);
       scene.current = null;

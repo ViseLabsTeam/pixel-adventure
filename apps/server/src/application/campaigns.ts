@@ -11,12 +11,16 @@ import {
   type Game,
 } from "@umbral/core";
 import { prototype } from "@umbral/content/prototype";
+import { animationGraceMs } from "@umbral/content";
 import {
   commandSchema,
   joinSchema,
+  availabilitySchema,
+  reserveClassSchema,
   type Session,
   type GameView,
   type Receipt,
+  type ClassAvailability,
 } from "@umbral/protocol";
 import {
   hash,
@@ -87,6 +91,84 @@ export async function createCampaign() {
     recoveryCode,
   };
 }
+export async function classAvailability(
+  input: unknown,
+): Promise<ClassAvailability> {
+  const data = availabilitySchema.parse(input);
+  const result = await pool.query(
+    "SELECT id,snapshot FROM campaigns WHERE code=$1",
+    [data.code],
+  );
+  if (!result.rows[0])
+    throw new RuleError("NOT_FOUND", "Ese código no corresponde a una mesa.");
+  const game = validateSave(result.rows[0].snapshot);
+  const reservations = await pool.query(
+    "SELECT class_id,token_hash FROM class_reservations WHERE campaign_id=$1 AND expires_at>now()",
+    [game.id],
+  );
+  return {
+    status: game.status,
+    occupied: game.players.map((player) => player.classId),
+    reserved: reservations.rows
+      .filter((row) => row.token_hash !== hash(data.reservationToken ?? ""))
+      .map((row) => row.class_id),
+  };
+}
+export async function reserveClass(input: unknown) {
+  const data = reserveClassSchema.parse(input);
+  return transaction(async (client) => {
+    const row = (
+      await client.query(
+        "SELECT snapshot FROM campaigns WHERE code=$1 FOR UPDATE",
+        [data.code],
+      )
+    ).rows[0];
+    if (!row)
+      throw new RuleError("NOT_FOUND", "Ese código no corresponde a una mesa.");
+    const game = validateSave(row.snapshot);
+    if (game.status !== "LOBBY")
+      throw new RuleError("ALREADY_STARTED", "La aventura ya comenzó.");
+    if (game.players.some((player) => player.classId === data.classId))
+      throw new RuleError(
+        "CLASS_TAKEN",
+        "Ese personaje ya fue elegido en esta mesa.",
+      );
+    await client.query(
+      "DELETE FROM class_reservations WHERE campaign_id=$1 AND expires_at<=now()",
+      [game.id],
+    );
+    const existing = (
+      await client.query(
+        "SELECT token_hash FROM class_reservations WHERE campaign_id=$1 AND class_id=$2",
+        [game.id, data.classId],
+      )
+    ).rows[0];
+    const tokenHash = hash(data.reservationToken);
+    if (existing && existing.token_hash !== tokenHash)
+      throw new RuleError(
+        "CLASS_TAKEN",
+        "Ese personaje está reservado por otra persona.",
+      );
+    await client.query(
+      "DELETE FROM class_reservations WHERE campaign_id=$1 AND token_hash=$2",
+      [game.id, tokenHash],
+    );
+    await client.query(
+      "INSERT INTO class_reservations(campaign_id,class_id,token_hash,expires_at) VALUES($1,$2,$3,now()+interval '30 seconds')",
+      [game.id, data.classId, tokenHash],
+    );
+    return { reserved: data.classId };
+  });
+}
+export async function releaseClass(input: unknown) {
+  const data = availabilitySchema.parse(input);
+  if (!data.reservationToken) return { released: false };
+  await pool.query(
+    "DELETE FROM class_reservations WHERE campaign_id=(SELECT id FROM campaigns WHERE code=$1) AND token_hash=$2",
+    [data.code, hash(data.reservationToken)],
+  );
+  return { released: true };
+}
 export async function joinCampaign(input: unknown) {
   const data = joinSchema.parse(input),
     id = randomUUID(),
@@ -101,6 +183,24 @@ export async function joinCampaign(input: unknown) {
     const previous = validateSave(result.rows[0].snapshot),
       next = addPlayer(previous, id, data.name, data.classId, prototype);
     await client.query(
+      "DELETE FROM class_reservations WHERE campaign_id=$1 AND expires_at<=now()",
+      [previous.id],
+    );
+    const reservation = (
+      await client.query(
+        "SELECT token_hash FROM class_reservations WHERE campaign_id=$1 AND class_id=$2",
+        [previous.id, data.classId],
+      )
+    ).rows[0];
+    if (
+      reservation &&
+      reservation.token_hash !== hash(data.reservationToken ?? "")
+    )
+      throw new RuleError(
+        "CLASS_TAKEN",
+        "Ese personaje está reservado por otra persona.",
+      );
+    await client.query(
       "INSERT INTO campaign_players(id,campaign_id,slot) VALUES($1,$2,$3)",
       [id, previous.id, next.players.length - 1],
     );
@@ -109,6 +209,10 @@ export async function joinCampaign(input: unknown) {
       [hash(credential), previous.id, "PLAYER", id],
     );
     await writeGame(client, previous, next);
+    await client.query(
+      "DELETE FROM class_reservations WHERE campaign_id=$1 AND (class_id=$2 OR token_hash=$3)",
+      [previous.id, data.classId, hash(data.reservationToken ?? "")],
+    );
     return {
       campaignId: previous.id,
       token: credential,
@@ -302,7 +406,14 @@ export async function execute(
           "La partida espera al jugador activo.",
         );
     }
-    if ((previous.animationUntil ?? 0) > Date.now()) throw new RuleError("ANIMATION_PLAYING", "Esperá a que termine la animación.");
+    if (
+      previous.animationPending ||
+      (previous.animationUntil ?? 0) > Date.now()
+    )
+      throw new RuleError(
+        "ANIMATION_PLAYING",
+        "Esperá a que termine la animación.",
+      );
     const next = resolve(
       previous,
       auth.playerId,
@@ -310,8 +421,16 @@ export async function execute(
       prototype,
       (sides) => randomInt(1, sides + 1),
     );
-    const duration=animationDuration(previous,next,command.action,auth.playerId);
-    next.animationUntil=duration ? Date.now()+duration+300 : 0;
+    const duration = animationDuration(
+      previous,
+      next,
+      command.action,
+      auth.playerId,
+    );
+    next.animationUntil = duration
+      ? Date.now() + duration + animationGraceMs
+      : 0;
+    next.animationPending = duration > 0;
     const ids = new Set(previous.events.map((e) => e.id)),
       result: Receipt = {
         commandId: command.commandId,
@@ -344,6 +463,7 @@ export function projectView(
   const player = game.players.find((p) => p.id === auth.playerId),
     actor = game.players.find((p) => p.id === game.activePlayerId);
   return {
+    animationPending: game.animationPending ?? false,
     animationUntil: game.animationUntil ?? 0,
     serverNow: Date.now(),
     id: game.id,
@@ -360,8 +480,9 @@ export function projectView(
       ...p,
       stats: effectiveStats(game, p),
     })),
-    enemies: game.enemies.map(({ id, name, x, y, hp, maxHp }) => ({
+    enemies: game.enemies.map(({ id, archetypeId, name, x, y, hp, maxHp }) => ({
       id,
+      archetypeId: archetypeId ?? id,
       name,
       x,
       y,
@@ -386,3 +507,33 @@ export function projectView(
   };
 }
 export { readGame };
+
+export async function finishAnimation(credential: string, revision: number) {
+  const auth = await authenticate(credential);
+  if (auth.role === "PLAYER")
+    throw new RuleError(
+      "FORBIDDEN",
+      "Solo la pantalla compartida confirma animaciones.",
+    );
+  const changed = await transaction(async (client) => {
+    const row = (
+      await client.query(
+        "SELECT snapshot FROM campaigns WHERE id=$1 FOR UPDATE",
+        [auth.campaignId],
+      )
+    ).rows[0];
+    if (
+      !(
+        await client.query("SELECT 1 FROM sessions WHERE token_hash=$1", [
+          auth.tokenHash,
+        ])
+      ).rowCount
+    )
+      throw new RuleError("UNAUTHORIZED", "Sesión reemplazada.");
+    const game = validateSave(row.snapshot);
+    if (game.revision !== revision || !game.animationPending) return false;
+    await writeGame(client, game, { ...game, animationPending: false });
+    return true;
+  });
+  if (changed) updates.emit(auth.campaignId);
+}

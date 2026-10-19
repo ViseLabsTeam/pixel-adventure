@@ -1,35 +1,20 @@
+import { format } from "prettier";
 import sharp from "sharp";
-import { mkdir, writeFile } from "node:fs/promises";
-const catalog = {
-  paladin: {
-    idle: "animascion_pasiva.gif",
-    walk: "caminata.gif",
-    walkUp: "caminata_s.gif",
-    basic: "ataque_basico_.gif",
-    special: "proteccion_.gif",
-    ultimate: "ulti.gif",
-  },
-  guerrero: {
-    idle: "indie.gif",
-    basic: "corte.gif",
-    special: "especial_.gif",
-    ultimate: "ultimate.gif",
-  },
-  mago: {
-    walk: "caminata.gif",
-    basic: "bola_de_fuego_.gif",
-    special: "ice.gif",
-    ultimate: "zaaaaap.gif",
-  },
-};
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+const recipes = JSON.parse(
+  await readFile("packages/content/actor-recipes.json", "utf8"),
+);
+const catalog = { ...recipes.players, ...recipes.enemies };
+const movementStepMs = 2000;
 const timings = {};
-for (const [category, actions] of Object.entries(catalog)) {
+for (const [id, recipe] of Object.entries(catalog)) {
+  const { folder, clips: actions } = recipe;
   const metadata = {};
-  timings[{paladin:"paladin",guerrero:"warrior",mago:"mage"}[category]]={};
-  const dir = "assets/" + category + "/generated";
+  timings[id] = {};
+  const dir = "assets/" + folder + "/generated";
   await mkdir(dir, { recursive: true });
   for (const [action, file] of Object.entries(actions)) {
-    const source = "assets/" + category + "/" + file;
+    const source = "assets/" + folder + "/" + file;
     const info = await sharp(source).metadata();
     const count = info.pages ?? 1;
     const indices = Array.from({ length: count }, (_, i) =>
@@ -38,16 +23,34 @@ for (const [category, actions] of Object.entries(catalog)) {
     const first = await sharp(source, { page: 0 })
       .trim({ background: "#00000000" })
       .toBuffer({ resolveWithObject: true });
-    const delays=Array.from({length:count},(_,i)=>info.delay?.[i] || 100);
-    const duration=delays.reduce((sum,ms)=>sum+ms,0);
-    timings[{paladin:"paladin",guerrero:"warrior",mago:"mage"}[category]][action]=duration;
-    const decoded=await sharp(source,{animated:true}).ensureAlpha().raw().toBuffer();
-    const frameHeight=info.pageHeight ?? info.height;
-    const frameBytes=info.width*frameHeight*4;
+    let delays = Array.from(
+      { length: count },
+      (_, i) => info.delay?.[i] || 100,
+    );
+    if (action.startsWith("walk")) {
+      const target = movementStepMs;
+      const original = delays.reduce((sum, ms) => sum + ms, 0);
+      delays = delays.map((ms) =>
+        Math.max(1, Math.round((ms * target) / original)),
+      );
+      delays[delays.length - 1] +=
+        target - delays.reduce((sum, ms) => sum + ms, 0);
+    }
+    const duration = delays.reduce((sum, ms) => sum + ms, 0);
+    timings[id][action] = duration;
+    const decoded = await sharp(source, { animated: true })
+      .ensureAlpha()
+      .raw()
+      .toBuffer();
+    const frameHeight = info.pageHeight ?? info.height;
+    const frameBytes = info.width * frameHeight * 4;
     const frames = [];
     for (let i = 0; i < count; i++)
       frames.push({
-        input: await sharp(decoded.subarray(i*frameBytes,(i+1)*frameBytes),{raw:{width:info.width,height:frameHeight,channels:4}})
+        input: await sharp(
+          decoded.subarray(i * frameBytes, (i + 1) * frameBytes),
+          { raw: { width: info.width, height: frameHeight, channels: 4 } },
+        )
           .resize(256, 256, {
             fit: "contain",
             background: "#00000000",
@@ -80,11 +83,11 @@ for (const [category, actions] of Object.entries(catalog)) {
       originY:
         (pad + (-(first.info.trimOffsetTop ?? 0) + first.info.height) * ratio) /
         256,
-      scale: (category === "paladin" ? 112 : 105) / (first.info.height * ratio),
+      scale: recipe.height / (first.info.height * ratio),
       source: file,
       indices,
     };
-    console.log(category, action, count);
+    console.log(id, action, count);
   }
   await writeFile(
     dir + "/animations.json",
@@ -92,4 +95,14 @@ for (const [category, actions] of Object.entries(catalog)) {
   );
 }
 
-await writeFile("packages/content/src/animation-timings.ts", "// Generated from the original GIF delays by assets:prepare.\nexport const animationTimings = "+JSON.stringify(timings,null,2)+" as const;\n");
+await writeFile(
+  "packages/content/src/animation-timings.ts",
+  await format(
+    "// Generated from the original GIF delays by assets:prepare.\nexport const movementStepMs = " +
+      movementStepMs +
+      ";\nexport const animationTimings = " +
+      JSON.stringify(timings, null, 2) +
+      " as const;\n",
+    { parser: "typescript" },
+  ),
+);

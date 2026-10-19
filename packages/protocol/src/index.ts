@@ -1,7 +1,25 @@
 import { z } from "zod";
 // Custom application code; 4001 is reserved for Colyseus server shutdown.
 export const SESSION_REPLACED = 4401;
-export const classSchema = z.enum(["paladin", "warrior", "mage"]);
+export const classSchema = z.enum(["paladin", "warrior", "mage", "archer"]);
+export const reservationTokenSchema = z.string().regex(/^[a-f0-9]{64}$/);
+export const availabilitySchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z2-9]{6}$/),
+  reservationToken: reservationTokenSchema.optional(),
+});
+export const reserveClassSchema = availabilitySchema.extend({
+  classId: classSchema,
+  reservationToken: reservationTokenSchema,
+});
+export interface ClassAvailability {
+  status: "LOBBY" | "ACTIVE" | "WON" | "LOST";
+  occupied: Array<z.infer<typeof classSchema>>;
+  reserved: Array<z.infer<typeof classSchema>>;
+}
 export const joinSchema = z.object({
   code: z
     .string()
@@ -10,6 +28,7 @@ export const joinSchema = z.object({
     .regex(/^[A-Z2-9]{6}$/),
   name: z.string().trim().min(2).max(20),
   classId: classSchema,
+  reservationToken: reservationTokenSchema.optional(),
 });
 export const commandSchema = z.object({
   commandId: z.uuid(),
@@ -67,7 +86,7 @@ export interface PlayerView {
   resource: number;
   id: string;
   name: string;
-  classId: "paladin" | "warrior" | "mage";
+  classId: z.infer<typeof classSchema>;
   slot: number;
   hp: number;
   stats: Stats;
@@ -89,6 +108,7 @@ export interface ItemView {
 }
 export interface EnemyView {
   id: string;
+  archetypeId: string;
   name: string;
   x: number;
   y: number;
@@ -97,6 +117,7 @@ export interface EnemyView {
 }
 export interface GameView {
   animationUntil: number;
+  animationPending: boolean;
   serverNow: number;
   id: string;
   code: string;
@@ -119,7 +140,13 @@ export interface GameView {
     y: number;
     kind: "fountain" | "exit";
   }[];
-  map: { width: number; height: number; walls: { x: number; y: number }[] };
+  map: {
+    minX: number;
+    minY: number;
+    width: number;
+    height: number;
+    walls: { x: number; y: number }[];
+  };
   events: {
     id: string;
     text: string;
@@ -141,3 +168,153 @@ export interface Receipt {
   revision: number;
   events: GameView["events"];
 }
+
+const nonnegative = z.number().int().nonnegative();
+const pointSchema = z.object({ x: z.number().int(), y: z.number().int() });
+const equipmentSlotSchema = z.enum(["helmet", "gloves", "pants", "chest"]);
+const gameStatusSchema = z.enum(["LOBBY", "ACTIVE", "WON", "LOST"]);
+const eventSchema = z.object({
+  id: z.string(),
+  text: z.string(),
+  kind: z.string(),
+  dice: z.array(z.number().int().positive()).optional(),
+  actorId: z.string().optional(),
+  targetId: z.string().optional(),
+  ability: z.enum(["basic", "special", "ultimate"]).optional(),
+  amount: z.number().optional(),
+});
+
+export const sessionSchema: z.ZodType<Session> = z.object({
+  campaignId: z.uuid(),
+  token: z.string().min(1),
+  role: z.enum(["COORDINATOR", "DISPLAY", "PLAYER"]),
+  playerId: z.uuid().nullable(),
+  code: z.string().regex(/^[A-Z2-9]{6}$/),
+});
+
+export const classAvailabilitySchema: z.ZodType<ClassAvailability> = z.object({
+  status: gameStatusSchema,
+  occupied: z.array(classSchema),
+  reserved: z.array(classSchema),
+});
+
+export const gameViewSchema: z.ZodType<GameView> = z.object({
+  animationUntil: nonnegative,
+  animationPending: z.boolean(),
+  serverNow: nonnegative,
+  id: z.uuid(),
+  code: z.string(),
+  revision: nonnegative,
+  status: gameStatusSchema,
+  round: nonnegative,
+  phase: z.enum(["MOVEMENT", "ACTION"]),
+  activePlayerId: z.uuid().nullable(),
+  movementRoll: z.number().int().min(1).max(6).nullable(),
+  movementLeft: nonnegative,
+  actionUsed: z.boolean(),
+  players: z.array(
+    pointSchema.extend({
+      resource: nonnegative,
+      id: z.uuid(),
+      name: z.string(),
+      classId: classSchema,
+      slot: nonnegative,
+      hp: nonnegative,
+      stats: z.object({
+        maxHp: z.number().positive(),
+        accuracy: z.number(),
+        dodge: z.number(),
+        agility: z.number(),
+        defense: z.number(),
+        resistance: z.number(),
+        range: nonnegative,
+        damageType: z.enum(["physical", "magic"]),
+        damageMultiplier: z.number().optional(),
+      }),
+      inventory: z.array(z.string().nullable()),
+      equipment: z.object({
+        helmet: z.string().nullable(),
+        gloves: z.string().nullable(),
+        pants: z.string().nullable(),
+        chest: z.string().nullable(),
+      }),
+    }),
+  ),
+  enemies: z.array(
+    pointSchema.extend({
+      id: z.string(),
+      archetypeId: z.string(),
+      name: z.string(),
+      hp: nonnegative,
+      maxHp: z.number().positive(),
+    }),
+  ),
+  items: z.record(
+    z.string(),
+    z.object({
+      id: z.string(),
+      definitionId: z.string(),
+      ownerId: z.string(),
+      name: z.string(),
+      slot: equipmentSlotSchema.nullable(),
+      defense: z.number(),
+      resistance: z.number(),
+      heal: nonnegative,
+      restoreResource: nonnegative,
+    }),
+  ),
+  chests: z.array(pointSchema.extend({ id: z.string(), opened: z.boolean() })),
+  zones: z.array(
+    pointSchema.extend({
+      id: z.string(),
+      name: z.string(),
+      kind: z.enum(["fountain", "exit"]),
+    }),
+  ),
+  map: z.object({
+    minX: z.number().int(),
+    minY: z.number().int(),
+    width: z.number().int().positive(),
+    height: z.number().int().positive(),
+    walls: z.array(pointSchema),
+  }),
+  events: z.array(eventSchema),
+  onlinePlayerIds: z.array(z.uuid()),
+  paused: z.boolean(),
+  targets: z.record(
+    z.string(),
+    z.object({ chance: z.number(), valid: z.boolean() }),
+  ),
+  selectedTarget: z.string().nullable(),
+  storageError: z.boolean(),
+});
+
+export const receiptSchema: z.ZodType<Receipt> = z.object({
+  commandId: z.uuid(),
+  revision: nonnegative,
+  events: z.array(eventSchema),
+});
+
+export const failureSchema = z.object({
+  code: z.string(),
+  message: z.string(),
+});
+
+export const storageErrorSchema = z.object({ message: z.string() });
+
+export const apiResponseSchemas = {
+  campaigns: z.object({ session: sessionSchema, recoveryCode: z.string() }),
+  join: z.object({ session: sessionSchema }),
+  recover: z.object({ session: sessionSchema }),
+  claim: z.object({ session: sessionSchema }),
+  reclaim: z.object({ claimCode: z.string().regex(/^[A-F0-9]{16}$/) }),
+  connect: z.object({ roomId: z.string().min(1), code: z.string() }),
+  "class-availability": classAvailabilitySchema,
+  "reserve-class": z.object({ reserved: classSchema }),
+  "release-class": z.object({ released: z.boolean() }),
+} as const;
+
+export type ApiPath = keyof typeof apiResponseSchemas;
+export type ApiResponse<Path extends ApiPath> = z.output<
+  (typeof apiResponseSchemas)[Path]
+>;

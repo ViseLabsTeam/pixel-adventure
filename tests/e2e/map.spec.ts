@@ -13,20 +13,20 @@ test("recupera el mapa aunque fallen metadatos de animación", async ({
   await host.route("**/assets/mapas/generated/courtyard.webp", (route) =>
     failMap ? route.abort() : route.continue(),
   );
-  await host.route("**/assets/paladin/generated/animations.json", (route) =>
+  await host.route("**/assets/paladin/generated/animations.json*", (route) =>
     route.fulfill({ status: 503, body: "unavailable" }),
   );
   try {
     await host.goto(baseURL!);
     await host.getByRole("button", { name: "Crear una partida" }).click();
     const code = await host.getByTestId("room-code").innerText();
-    for (const name of ["Mapa Uno", "Mapa Dos"]) {
+    for (const [index, name] of ["Mapa Uno", "Mapa Dos"].entries()) {
       const context = await browser.newContext();
       contexts.push(context);
       const page = await context.newPage();
       await page.goto(baseURL + "/#/join/" + code);
       await page.getByLabel("Nombre del viajero").fill(name);
-      await page.getByRole("radio").first().click();
+      await page.getByRole("radio").nth(index).click();
       await page.getByRole("button", { name: "Sentarme a la mesa" }).click();
       await expect(
         page.getByText(name + ", tu lugar está reservado."),
