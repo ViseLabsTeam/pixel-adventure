@@ -100,7 +100,11 @@ function App() {
           recoveryCode={recoveryCode}
         />
       ) : session.role === "PLAYER" ? (
-        <Controller connection={activeConnection} session={session} />
+        <Controller
+          connection={activeConnection}
+          session={session}
+          preferences={preferences}
+        />
       ) : (
         <Table
           connection={activeConnection}

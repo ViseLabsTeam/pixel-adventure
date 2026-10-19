@@ -17,18 +17,20 @@ export default defineConfig({
             !file.startsWith(resolve(projectRoot, "assets") + "\\")
           )
             return next();
-          if (!/\.(png|webp|gif|json)$/i.test(file)) return next();
+          if (!/\.(png|webp|gif|json|ttf)$/i.test(file)) return next();
           try {
             const data = await readFile(file);
             res.setHeader(
               "Content-Type",
               file.endsWith(".json")
                 ? "application/json"
-                : file.endsWith(".webp")
-                  ? "image/webp"
-                  : file.endsWith(".gif")
-                    ? "image/gif"
-                    : "image/png",
+                : file.endsWith(".ttf")
+                  ? "font/ttf"
+                  : file.endsWith(".webp")
+                    ? "image/webp"
+                    : file.endsWith(".gif")
+                      ? "image/gif"
+                      : "image/png",
             );
             res.end(data);
           } catch {

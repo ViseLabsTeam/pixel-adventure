@@ -40,7 +40,8 @@ export function Lobby({
         </div>
         <span className="pill">
           <Users size={16} />
-          {game.players.length} / 4 viajeros
+          {game.players.length} /{" "}
+          {Math.max(Object.keys(classes).length, game.players.length)} viajeros
         </span>
       </div>
       <div className="lobby-grid">
@@ -49,45 +50,56 @@ export function Lobby({
             <h2>Tu compañía</h2>
             <span>ORDEN DE LOS TURNOS</span>
           </div>
-          {Array.from({ length: 4 }, (_, slot) => {
-            const player = game.players[slot];
-            return (
-              <div className={`traveler ${!player ? "empty" : ""}`} key={slot}>
-                <b className="slot-number">0{slot + 1}</b>
-                {player ? (
-                  <>
-                    <img src={classes[player.classId].portrait} alt="" />
-                    <div>
-                      <h3>
-                        {player.name}
-                        {player.id === session.playerId && (
-                          <small> · Vos</small>
-                        )}
-                      </h3>
-                      <span>{classes[player.classId].name}</span>
-                    </div>
-                    <span
-                      className={`connection-label ${game.onlinePlayerIds.includes(player.id) ? "online" : ""}`}
-                    >
-                      {game.onlinePlayerIds.includes(player.id)
-                        ? "Listo"
-                        : "Sin conexión"}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <div className="empty-avatar">
-                      <Users />
-                    </div>
-                    <div>
-                      <h3>Un lugar espera</h3>
-                      <span>Invitá a otro viajero</span>
-                    </div>
-                  </>
-                )}
-              </div>
-            );
-          })}
+          {Array.from(
+            {
+              length: Math.max(
+                Object.keys(classes).length,
+                game.players.length,
+              ),
+            },
+            (_, slot) => {
+              const player = game.players[slot];
+              return (
+                <div
+                  className={`traveler ${!player ? "empty" : ""}`}
+                  key={slot}
+                >
+                  <b className="slot-number">0{slot + 1}</b>
+                  {player ? (
+                    <>
+                      <img src={classes[player.classId].portrait} alt="" />
+                      <div>
+                        <h3>
+                          {player.name}
+                          {player.id === session.playerId && (
+                            <small> · Vos</small>
+                          )}
+                        </h3>
+                        <span>{classes[player.classId].name}</span>
+                      </div>
+                      <span
+                        className={`connection-label ${game.onlinePlayerIds.includes(player.id) ? "online" : ""}`}
+                      >
+                        {game.onlinePlayerIds.includes(player.id)
+                          ? "Listo"
+                          : "Sin conexión"}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <div className="empty-avatar">
+                        <Users />
+                      </div>
+                      <div>
+                        <h3>Un lugar espera</h3>
+                        <span>Invitá a otro viajero</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            },
+          )}
           <div className="lobby-start">
             {isHost ? (
               <>

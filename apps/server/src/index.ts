@@ -13,6 +13,9 @@ import {
   authenticate,
   createCampaign,
   joinCampaign,
+  classAvailability,
+  reserveClass,
+  releaseClass,
   recoverCampaign,
   reclaimPlayer,
   claimPlayer,
@@ -84,6 +87,15 @@ app.post("/api/campaigns", async (_req, res) =>
 );
 app.post("/api/join", async (req, res) =>
   res.json(await joinCampaign(req.body)),
+);
+app.post("/api/class-availability", async (req, res) =>
+  res.json(await classAvailability(req.body)),
+);
+app.post("/api/reserve-class", async (req, res) =>
+  res.json(await reserveClass(req.body)),
+);
+app.post("/api/release-class", async (req, res) =>
+  res.json(await releaseClass(req.body)),
 );
 app.post("/api/recover", async (req, res) =>
   res.json(

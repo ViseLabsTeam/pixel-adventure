@@ -1,3 +1,5 @@
+import actorRecipes from "../actor-recipes.json";
+export { actorRecipes };
 export const classes = {
   paladin: {
     name: "Paladín",
@@ -26,6 +28,15 @@ export const classes = {
     attack: "Descarga arcana",
     range: 2,
   },
+  archer: {
+    name: "Arquera",
+    title: "La mirada del bosque",
+    description: "Cada flecha encuentra el camino entre las sombras.",
+    color: "#a8d677",
+    portrait: "/assets/arquera/generated/portrait.png",
+    attack: "Disparo certero",
+    range: 3,
+  },
 } as const;
 export type ClassId = keyof typeof classes;
 export const equipmentSlots = {
@@ -50,6 +61,16 @@ export const abilities = {
   paladin: { special: "Impacto consagrado", ultimate: "Juicio del guardián" },
   warrior: { special: "Corte furioso", ultimate: "Furia desatada" },
   mage: { special: "Lanza de hielo", ultimate: "Sobrecarga arcana" },
+  archer: { special: "Flecha concentrada", ultimate: "Lluvia de flechas" },
 } as const;
 
-export { animationTimings } from "./animation-timings";
+export { animationTimings, movementStepMs } from "./animation-timings";
+export { diceTimings } from "./dice-timings";
+export const animationGraceMs = 300;
+export const combatPresentation = {
+  resultMs: 650,
+  lingerMs: 450,
+  get totalMs() {
+    return this.resultMs + this.lingerMs;
+  },
+} as const;

@@ -1,0 +1,10 @@
+{
+  "d6": {
+    "source": "dados/D6.gif",
+    "duration": 1600
+  },
+  "d20": {
+    "source": "dados/D20.gif",
+    "duration": 1600
+  }
+}

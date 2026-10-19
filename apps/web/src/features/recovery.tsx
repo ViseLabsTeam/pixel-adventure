@@ -17,11 +17,7 @@ export function Recovery({
     setCode("");
     setError("");
     try {
-      const result = await api<{ claimCode: string }>(
-        "reclaim",
-        { playerId },
-        session.token,
-      );
+      const result = await api("reclaim", { playerId }, session.token);
       setCode(result.claimCode);
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo recuperar.");

@@ -1,0 +1,68 @@
+{
+  "players": {
+    "paladin": {
+      "folder": "paladin",
+      "portraitSource": "animascion_pasiva.gif",
+      "height": 112,
+      "clips": {
+        "idle": "animascion_pasiva.gif",
+        "walk": "caminata.gif",
+        "walkUp": "caminata_W.gif",
+        "walkDown": "caminata_s.gif",
+        "basic": "ataque_basico_.gif",
+        "special": "proteccion_.gif",
+        "ultimate": "ulti.gif"
+      }
+    },
+    "warrior": {
+      "folder": "guerrero",
+      "portraitSource": "indie.gif",
+      "height": 105,
+      "clips": {
+        "idle": "indie.gif",
+        "walkUp": "caminata_w.gif",
+        "walkDown": "caminata_s.gif",
+        "basic": "corte.gif",
+        "special": "especial_.gif",
+        "ultimate": "ultimate.gif"
+      }
+    },
+    "mage": {
+      "folder": "mago",
+      "portraitSource": "bola_de_fuego_.gif",
+      "height": 105,
+      "clips": {
+        "walk": "caminata.gif",
+        "walkUp": "caminata_w.gif",
+        "walkDown": "caminata_s.gif",
+        "basic": "bola_de_fuego_.gif",
+        "special": "ice.gif",
+        "ultimate": "zaaaaap.gif"
+      }
+    },
+    "archer": {
+      "folder": "arquera",
+      "portraitSource": "basico_.gif",
+      "height": 105,
+      "clips": {
+        "walk": "caminata_.gif",
+        "walkUp": "caminata_w.gif",
+        "walkDown": "caminata_s.gif",
+        "basic": "basico_.gif",
+        "special": "especial.gif",
+        "ultimate": "ulti.gif"
+      }
+    }
+  },
+  "enemies": {
+    "goblin": {
+      "folder": "enemigos/goblin",
+      "portraitSource": "Goblin_Enemy_32x32.gif",
+      "height": 84,
+      "clips": {
+        "idle": "Goblin_Enemy_32x32.gif",
+        "basic": "Goblin_Enemy_32x32_attack.gif"
+      }
+    }
+  }
+}
