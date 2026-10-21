@@ -5,10 +5,491 @@ process.env.DATABASE_URL =
   "postgres://umbral:umbral_local@127.0.0.1:5434/umbral_test";
 if (!new URL(process.env.DATABASE_URL).pathname.endsWith("_test"))
   throw new Error("Integration tests require a database name ending in _test");
-const { pool } = await import("../src/persistence/database");
+const { pool, validateSave } = await import("../src/persistence/database");
 const { migrate } = await import("../src/persistence/migrate");
 const api = await import("../src/application/campaigns");
 const campaigns: string[] = [];
+it("guarda el descarte y recupera su recibo sin ejecutarlo dos veces", async () => {
+  const f = await setup();
+  const game = await api.readGame(f.host.session.campaignId);
+  const itemId = game.players[0].inventory[1]!;
+  const request = {
+    commandId: randomUUID(),
+    expectedRevision: game.revision,
+    action: { type: "DISCARD_ITEM", itemId },
+  };
+  const receipt = await api.execute(f.one.token, request, f.online);
+  const after = await api.readGame(game.id);
+  expect(after.items[itemId]).toBeUndefined();
+  expect(after.players[0].inventory[1]).toBeNull();
+  expect(after.actionUsed).toBe(true);
+  expect(
+    after.events.filter((e) => e.kind === "DISCARD" && e.targetId === itemId),
+  ).toHaveLength(1);
+  expect(await api.execute(f.one.token, request, f.online)).toEqual(receipt);
+  expect(await api.readGame(game.id)).toEqual(after);
+}, 15_000);
+it("revierte un descarte si falla el guardado y permite reintentar el mismo comando", async () => {
+  const f = await setup();
+  const game = await api.readGame(f.host.session.campaignId);
+  const itemId = game.players[0].inventory[0]!;
+  const request = {
+    commandId: randomUUID(),
+    expectedRevision: game.revision,
+    action: { type: "DISCARD_ITEM", itemId },
+  };
+  await pool.query(
+    `CREATE FUNCTION fail_discard_save() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF OLD.id = '${game.id}'::uuid THEN RAISE EXCEPTION 'discard_save_failure'; END IF; RETURN NEW; END $$`,
+  );
+  await pool.query(
+    "CREATE TRIGGER fail_discard_save BEFORE UPDATE ON campaigns FOR EACH ROW EXECUTE FUNCTION fail_discard_save()",
+  );
+  try {
+    await expect(api.execute(f.one.token, request, f.online)).rejects.toThrow(
+      "discard_save_failure",
+    );
+    expect(await api.readGame(game.id)).toEqual(game);
+    expect(
+      (
+        await pool.query(
+          "SELECT 1 FROM command_receipts WHERE campaign_id=$1 AND command_id=$2",
+          [game.id, request.commandId],
+        )
+      ).rowCount,
+    ).toBe(0);
+  } finally {
+    await pool.query("DROP TRIGGER IF EXISTS fail_discard_save ON campaigns");
+    await pool.query("DROP FUNCTION IF EXISTS fail_discard_save()");
+  }
+  const receipt = await api.execute(f.one.token, request, f.online);
+  expect((await api.readGame(game.id)).items[itemId]).toBeUndefined();
+  expect(await api.execute(f.one.token, request, f.online)).toEqual(receipt);
+});
+it("persiste el intercambio de cascos en su espacio original con bolsa llena", async () => {
+  const f = await setup();
+  const game = await api.readGame(f.host.session.campaignId);
+  const { prototype } = await import("@umbral/content/prototype");
+  const player = game.players[0];
+  delete game.items[player.inventory[2]!];
+  for (const id of ["helmet-old", "helmet-new"])
+    game.items[id] = {
+      ...prototype.items["iron-helmet"],
+      id,
+      definitionId: "iron-helmet",
+      ownerId: player.id,
+    };
+  player.inventory[2] = "helmet-new";
+  player.equipment.helmet = "helmet-old";
+  await pool.query("UPDATE campaigns SET snapshot=$1 WHERE id=$2", [
+    JSON.stringify(game),
+    game.id,
+  ]);
+  const request = {
+    commandId: randomUUID(),
+    expectedRevision: game.revision,
+    action: { type: "EQUIP", itemId: "helmet-new" },
+  };
+  const receipt = await api.execute(f.one.token, request, f.online);
+  const after = await api.readGame(game.id);
+  expect(after.players[0].inventory).toEqual([
+    player.inventory[0],
+    player.inventory[1],
+    "helmet-old",
+    player.inventory[3],
+  ]);
+  expect(after.players[0].equipment.helmet).toBe("helmet-new");
+  expect(after.items["helmet-old"].ownerId).toBe(player.id);
+  expect(await api.execute(f.one.token, request, f.online)).toEqual(receipt);
+  expect(await api.readGame(game.id)).toEqual(after);
+});
+it("rechaza desequipar con bolsa llena sin gastar la acción y confirma al liberar espacio", async () => {
+  const f = await setup();
+  const game = await api.readGame(f.host.session.campaignId);
+  const { prototype } = await import("@umbral/content/prototype");
+  const player = game.players[0];
+  game.items.helmet = {
+    ...prototype.items["iron-helmet"],
+    id: "helmet",
+    definitionId: "iron-helmet",
+    ownerId: player.id,
+  };
+  player.equipment.helmet = "helmet";
+  game.items.filler = { ...game.items[player.inventory[0]!], id: "filler" };
+  player.inventory[3] = "filler";
+  await pool.query("UPDATE campaigns SET snapshot=$1 WHERE id=$2", [
+    JSON.stringify(game),
+    game.id,
+  ]);
+  const before = await api.readGame(game.id);
+  const request = {
+    commandId: randomUUID(),
+    expectedRevision: game.revision,
+    action: { type: "UNEQUIP", slot: "helmet" },
+  };
+  await expect(
+    api.execute(f.one.token, request, f.online),
+  ).rejects.toMatchObject({ code: "INVENTORY_FULL" });
+  expect(await api.readGame(game.id)).toEqual(before);
+  expect(
+    (
+      await pool.query(
+        "SELECT 1 FROM command_receipts WHERE campaign_id=$1 AND command_id=$2",
+        [game.id, request.commandId],
+      )
+    ).rowCount,
+  ).toBe(0);
+  delete game.items[player.inventory[1]!];
+  player.inventory[1] = null;
+  await pool.query("UPDATE campaigns SET snapshot=$1 WHERE id=$2", [
+    JSON.stringify(game),
+    game.id,
+  ]);
+  await api.execute(f.one.token, request, f.online);
+  const after = await api.readGame(game.id);
+  expect(after.players[0].equipment.helmet).toBeNull();
+  expect(after.players[0].inventory[1]).toBe("helmet");
+  expect(after.actionUsed).toBe(true);
+});
+it("rechaza botín de otra clase sin guardarlo ni confirmar un recibo", async () => {
+  const fixture = await setup();
+  const game = await api.readGame(fixture.host.session.campaignId);
+  const player = game.players[0];
+  delete game.items[player.inventory[0]!];
+  player.inventory[0] = null;
+  const { prototype } = await import("@umbral/content/prototype");
+  game.chests = [
+    {
+      id: "class-chest",
+      x: player.x,
+      y: player.y,
+      opened: true,
+      itemDefinition: "mage-staff",
+      lootId: "class-loot",
+    },
+  ];
+  game.items["class-loot"] = {
+    ...prototype.items["mage-staff"],
+    id: "class-loot",
+    definitionId: "mage-staff",
+    ownerId: "",
+  };
+  await pool.query("UPDATE campaigns SET snapshot=$1 WHERE id=$2", [
+    JSON.stringify(game),
+    game.id,
+  ]);
+  const before = await api.readGame(game.id);
+  const request = {
+    commandId: randomUUID(),
+    expectedRevision: game.revision,
+    action: { type: "INTERACT", targetId: "class-chest" },
+  };
+  await expect(
+    api.execute(fixture.one.token, request, fixture.online),
+  ).rejects.toMatchObject({ code: "ITEM_WRONG_CLASS" });
+  expect(await api.readGame(game.id)).toEqual(before);
+  expect(
+    (
+      await pool.query(
+        "SELECT 1 FROM command_receipts WHERE campaign_id=$1 AND command_id=$2",
+        [game.id, request.commandId],
+      )
+    ).rowCount,
+  ).toBe(0);
+});
+it("migra equipo genérico a su clase con respaldo y conserva IDs y revisión", async () => {
+  const fixture = await setup();
+  const game = await api.readGame(fixture.host.session.campaignId);
+  const old = JSON.parse(JSON.stringify(game));
+  const receiptsBefore = (
+    await pool.query(
+      "SELECT command_id,result FROM command_receipts WHERE campaign_id=$1 ORDER BY command_id",
+      [game.id],
+    )
+  ).rows;
+  delete old.itemClassRulesVersion;
+  const mage = old.players.find(
+    (p: { classId: string }) => p.classId === "mage",
+  );
+  const id = mage.inventory.find(
+    (itemId: string | null) => itemId && old.items[itemId].slot === "weapon",
+  );
+  old.items[id].definitionId = "rusty-sword";
+  old.items[id].name = "Espada gastada";
+  old.items[id].physicalDamage = 2;
+  delete old.items[id].magicDamage;
+  await pool.query("UPDATE campaigns SET snapshot=$1 WHERE id=$2", [
+    JSON.stringify(old),
+    game.id,
+  ]);
+  await migrate();
+  const upgraded = await api.readGame(game.id);
+  expect(upgraded.items[id]).toMatchObject({
+    id,
+    definitionId: "mage-staff",
+    ownerId: mage.id,
+    name: "Bastón de mago",
+    magicDamage: 2,
+  });
+  expect(upgraded.items[id].physicalDamage).toBeUndefined();
+  expect(upgraded.players[1].inventory).toEqual(mage.inventory);
+  expect(upgraded.revision).toBe(game.revision);
+  expect(upgraded.itemClassRulesVersion).toBe(1);
+  expect(
+    (
+      await pool.query(
+        "SELECT command_id,result FROM command_receipts WHERE campaign_id=$1 ORDER BY command_id",
+        [game.id],
+      )
+    ).rows,
+  ).toEqual(receiptsBefore);
+  expect(
+    (
+      await pool.query(
+        "SELECT snapshot FROM campaign_save_backups WHERE campaign_id=$1 AND migration='class-items-v1'",
+        [game.id],
+      )
+    ).rows[0].snapshot,
+  ).toEqual(old);
+  await migrate();
+  expect(await api.readGame(game.id)).toEqual(upgraded);
+  expect(
+    (
+      await pool.query(
+        "SELECT 1 FROM campaign_save_backups WHERE campaign_id=$1 AND migration='class-items-v1'",
+        [game.id],
+      )
+    ).rowCount,
+  ).toBe(1);
+});
+it("migra pociones de partidas anteriores sin duplicar objetos ni recibos", async () => {
+  const fixture = await setup();
+  const game = await api.readGame(fixture.host.session.campaignId);
+  const old = JSON.parse(JSON.stringify(game));
+  delete old.potionSlotsVersion;
+  for (const player of old.players) {
+    player.inventory[3] = player.potions[0];
+    delete player.potions;
+  }
+  const receipts = (
+    await pool.query(
+      "SELECT command_id,result FROM command_receipts WHERE campaign_id=$1 ORDER BY command_id",
+      [game.id],
+    )
+  ).rows;
+  await pool.query("UPDATE campaigns SET snapshot=$1 WHERE id=$2", [
+    JSON.stringify(old),
+    game.id,
+  ]);
+  await migrate();
+  const upgraded = await api.readGame(game.id);
+  expect(upgraded.revision).toBe(game.revision);
+  expect(upgraded.potionSlotsVersion).toBe(1);
+  for (const [index, player] of upgraded.players.entries()) {
+    expect(player.inventory[3]).toBeNull();
+    expect(player.potions[0]).toBe(game.players[index].potions[0]);
+    expect(upgraded.items[player.potions[0]!].ownerId).toBe(player.id);
+  }
+  expect(
+    (
+      await pool.query(
+        "SELECT command_id,result FROM command_receipts WHERE campaign_id=$1 ORDER BY command_id",
+        [game.id],
+      )
+    ).rows,
+  ).toEqual(receipts);
+  expect(
+    (
+      await pool.query(
+        "SELECT snapshot FROM campaign_save_backups WHERE campaign_id=$1 AND migration='potion-slots-v1'",
+        [game.id],
+      )
+    ).rows[0].snapshot,
+  ).toEqual(old);
+  await migrate();
+  expect(await api.readGame(game.id)).toEqual(upgraded);
+});
+it("convierte la espada anterior del paladín en escudo sin cambiar su ID", async () => {
+  const fixture = await setup();
+  const game = await api.readGame(fixture.host.session.campaignId);
+  const old = JSON.parse(JSON.stringify(game));
+  const player = old.players[0];
+  const id = player.inventory.find(
+    (itemId: string | null) =>
+      itemId && old.items[itemId].definitionId === "paladin-shield",
+  );
+  old.items[id].definitionId = "rusty-sword";
+  old.items[id].name = "Espada gastada";
+  delete old.paladinShieldVersion;
+  const receipts = (
+    await pool.query(
+      "SELECT command_id,result FROM command_receipts WHERE campaign_id=$1 ORDER BY command_id",
+      [game.id],
+    )
+  ).rows;
+  await pool.query("UPDATE campaigns SET snapshot=$1 WHERE id=$2", [
+    JSON.stringify(old),
+    game.id,
+  ]);
+  await migrate();
+  const upgraded = await api.readGame(game.id);
+  expect(upgraded.items[id]).toMatchObject({
+    id,
+    ownerId: player.id,
+    definitionId: "paladin-shield",
+    name: "Escudo de paladín",
+  });
+  expect(upgraded.players[0].inventory).toEqual(player.inventory);
+  expect(upgraded.revision).toBe(game.revision);
+  expect(
+    (
+      await pool.query(
+        "SELECT command_id,result FROM command_receipts WHERE campaign_id=$1 ORDER BY command_id",
+        [game.id],
+      )
+    ).rows,
+  ).toEqual(receipts);
+  expect(
+    (
+      await pool.query(
+        "SELECT snapshot FROM campaign_save_backups WHERE campaign_id=$1 AND migration='paladin-shield-v1'",
+        [game.id],
+      )
+    ).rows[0].snapshot,
+  ).toEqual(old);
+  await migrate();
+  expect(await api.readGame(game.id)).toEqual(upgraded);
+});
+it("revierte la migración de pociones y su respaldo si falla el guardado", async () => {
+  const fixture = await setup();
+  const game = await api.readGame(fixture.host.session.campaignId);
+  const old = JSON.parse(JSON.stringify(game));
+  delete old.potionSlotsVersion;
+  for (const player of old.players) {
+    player.inventory[3] = player.potions[0];
+    delete player.potions;
+  }
+  await pool.query("UPDATE campaigns SET snapshot=$1 WHERE id=$2", [
+    JSON.stringify(old),
+    game.id,
+  ]);
+  await pool.query(
+    `CREATE FUNCTION fail_potion_upgrade() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF OLD.id = '${game.id}'::uuid THEN RAISE EXCEPTION 'potion_upgrade_test_failure'; END IF; RETURN NEW; END $$`,
+  );
+  await pool.query(
+    "CREATE TRIGGER fail_potion_upgrade BEFORE UPDATE ON campaigns FOR EACH ROW EXECUTE FUNCTION fail_potion_upgrade()",
+  );
+  try {
+    await expect(migrate()).rejects.toThrow("potion_upgrade_test_failure");
+    expect(
+      (
+        await pool.query("SELECT snapshot FROM campaigns WHERE id=$1", [
+          game.id,
+        ])
+      ).rows[0].snapshot,
+    ).toEqual(old);
+    expect(
+      (
+        await pool.query(
+          "SELECT 1 FROM campaign_save_backups WHERE campaign_id=$1 AND migration='potion-slots-v1'",
+          [game.id],
+        )
+      ).rowCount,
+    ).toBe(0);
+  } finally {
+    await pool.query("DROP TRIGGER IF EXISTS fail_potion_upgrade ON campaigns");
+    await pool.query("DROP FUNCTION IF EXISTS fail_potion_upgrade()");
+    await migrate();
+  }
+});
+it("revierte la actualización y su respaldo si falla guardar la migración de objetos", async () => {
+  const fixture = await setup();
+  const game = await api.readGame(fixture.host.session.campaignId);
+  const old = JSON.parse(JSON.stringify(game));
+  delete old.itemClassRulesVersion;
+  delete old.paladinShieldVersion;
+  const paladinWeapon = old.players[0].inventory.find(
+    (itemId: string | null) =>
+      itemId && old.items[itemId].definitionId === "paladin-shield",
+  );
+  old.items[paladinWeapon].definitionId = "rusty-sword";
+  old.items[paladinWeapon].name = "Espada gastada";
+  await pool.query("UPDATE campaigns SET snapshot=$1 WHERE id=$2", [
+    JSON.stringify(old),
+    game.id,
+  ]);
+  await pool.query(
+    `CREATE FUNCTION fail_class_item_upgrade() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF OLD.id = '${game.id}'::uuid THEN RAISE EXCEPTION 'class_upgrade_test_failure'; END IF; RETURN NEW; END $$`,
+  );
+  await pool.query(
+    "CREATE TRIGGER fail_class_item_upgrade BEFORE UPDATE ON campaigns FOR EACH ROW EXECUTE FUNCTION fail_class_item_upgrade()",
+  );
+  try {
+    await expect(migrate()).rejects.toThrow("class_upgrade_test_failure");
+    expect(
+      (
+        await pool.query("SELECT snapshot FROM campaigns WHERE id=$1", [
+          game.id,
+        ])
+      ).rows[0].snapshot,
+    ).toEqual(old);
+    expect(
+      (
+        await pool.query(
+          "SELECT 1 FROM campaign_save_backups WHERE campaign_id=$1 AND migration='class-items-v1'",
+          [game.id],
+        )
+      ).rowCount,
+    ).toBe(0);
+    expect(
+      (
+        await pool.query(
+          "SELECT 1 FROM campaign_save_backups WHERE campaign_id=$1 AND migration='paladin-shield-v1'",
+          [game.id],
+        )
+      ).rowCount,
+    ).toBe(0);
+  } finally {
+    await pool.query(
+      "DROP TRIGGER IF EXISTS fail_class_item_upgrade ON campaigns",
+    );
+    await pool.query("DROP FUNCTION IF EXISTS fail_class_item_upgrade()");
+    await migrate();
+  }
+});
+it("recupera una campaña anterior sin puntos interactuables", async () => {
+  const host = await api.createCampaign();
+  campaigns.push(host.session.campaignId);
+  const game = await api.readGame(host.session.campaignId);
+  const old = JSON.parse(JSON.stringify(game));
+  delete old.interactables;
+  expect(validateSave(old).interactables).toEqual([]);
+});
+it("conserva equipo anterior al cargar ranuras nuevas", async () => {
+  const fixture = await setup();
+  const game = await api.readGame(fixture.host.session.campaignId);
+  const old = JSON.parse(JSON.stringify(game));
+  delete old.players[0].equipment.weapon;
+  delete old.itemClassRulesVersion;
+  delete old.players[0].equipment.boots;
+  old.items["legacy:gloves"] = {
+    id: "legacy:gloves",
+    definitionId: "cloth-gloves",
+    ownerId: old.players[0].id,
+    name: "Guantes del eco",
+    slot: "gloves",
+    defense: 0,
+    resistance: 2,
+    heal: 0,
+    restoreResource: 0,
+  };
+  old.players[0].equipment.gloves = "legacy:gloves";
+  const loaded = validateSave(old);
+  expect(loaded.players[0]?.equipment).toMatchObject({
+    weapon: null,
+    boots: null,
+    gloves: "legacy:gloves",
+  });
+});
 beforeAll(migrate);
 afterAll(async () => {
   for (const table of [
@@ -62,6 +543,35 @@ const command = (revision: number, type: string) => ({
   action: { type },
 });
 describe("PostgreSQL real: integridad y recuperación", () => {
+  it("guarda una planta recolectada y recupera el recibo sin duplicar su objeto", async () => {
+    const fixture = await setup();
+    const game = await api.readGame(fixture.host.session.campaignId);
+    game.players[0].x = -7;
+    game.players[0].y = -3;
+    game.players[0].potions[0] = null;
+    delete game.items[`${game.players[0].id}:potion`];
+    await pool.query("UPDATE campaigns SET snapshot=$1 WHERE id=$2", [
+      JSON.stringify(game),
+      game.id,
+    ]);
+    const request = {
+      commandId: randomUUID(),
+      expectedRevision: game.revision,
+      action: { type: "INTERACT", targetId: "object-1" },
+    };
+    const receipt = await api.execute(
+      fixture.one.token,
+      request,
+      fixture.online,
+    );
+    const saved = await api.readGame(game.id);
+    expect(saved.interactables[0].used).toBe(true);
+    expect(saved.players[0].potions).toContain(`${game.id}:object-1:gather`);
+    expect(
+      await api.execute(fixture.one.token, request, fixture.online),
+    ).toEqual(receipt);
+    expect((await api.readGame(game.id)).revision).toBe(saved.revision);
+  });
   it("reserva y recupera a la arquera como cuarta clase", async () => {
     const host = await api.createCampaign();
     campaigns.push(host.session.campaignId);
@@ -280,14 +790,14 @@ describe("PostgreSQL real: integridad y recuperación", () => {
       {
         commandId: randomUUID(),
         expectedRevision: 3,
-        action: { type: "EQUIP", itemId: f.one.playerId + ":travel-pants" },
+        action: { type: "EQUIP", itemId: f.one.playerId + ":travel-boots" },
       },
       f.online,
     );
     const game = await api.readGame(f.host.session.campaignId);
     expect(game.players[0].inventory).toHaveLength(4);
-    expect(game.players[0].equipment.pants).toBe(
-      f.one.playerId + ":travel-pants",
+    expect(game.players[0].equipment.boots).toBe(
+      f.one.playerId + ":travel-boots",
     );
     expect(game.players[0].inventory.filter(Boolean)).toHaveLength(2);
   });
@@ -361,6 +871,20 @@ it("reintento de especial no vuelve a consumir recurso", async () => {
   expect(after.players[0].resource).toBe(0);
   expect(await api.execute(f.one.token, cmd, f.online)).toEqual(receipt);
   expect(await api.readGame(g.id)).toEqual(after);
+  const clock = vi
+    .spyOn(Date, "now")
+    .mockReturnValue(after.animationUntil! + 1);
+  try {
+    await api.finishAnimation(f.host.session.token, after.revision);
+    const d6 = command(after.revision, "ROLL_ATTACK_D6");
+    const damageReceipt = await api.execute(f.one.token, d6, f.online);
+    const damaged = await api.readGame(g.id);
+    expect(damaged.pendingAttack).toBeNull();
+    expect(await api.execute(f.one.token, d6, f.online)).toEqual(damageReceipt);
+    expect(await api.readGame(g.id)).toEqual(damaged);
+  } finally {
+    clock.mockRestore();
+  }
 });
 it("migra guardado anterior conservando identidad, turno y respaldo", async () => {
   const f = await setup();
@@ -450,7 +974,8 @@ it("espera el GIF y la confirmación autorizada de la mesa antes de avanzar", as
   const receipt = await api.execute(f.one.token, cmd, f.online);
   const after = await api.readGame(g.id);
   expect(after.animationPending).toBe(true);
-  expect(after.animationUntil! - Date.now()).toBeGreaterThan(7000);
+  expect(after.pendingAttack?.ability).toBe("special");
+  expect(after.animationUntil! - Date.now()).toBeGreaterThan(2500);
   const end = command(after.revision, "END_TURN");
   await expect(api.execute(f.one.token, end, f.online)).rejects.toMatchObject({
     code: "ANIMATION_PLAYING",
@@ -470,7 +995,26 @@ it("espera el GIF y la confirmación autorizada de la mesa antes de avanzar", as
     );
     await api.finishAnimation(f.host.session.token, after.revision);
     await api.finishAnimation(f.host.session.token, after.revision);
-    await api.execute(f.one.token, end, f.online);
+    const d6 = await api.execute(
+      f.one.token,
+      command(after.revision, "ROLL_ATTACK_D6"),
+      f.online,
+    );
+    const damage = await api.readGame(g.id);
+    expect(damage.pendingAttack).toBeNull();
+    expect(damage.events.slice(-2).map((event) => event.kind)).toEqual([
+      "ATTACK_D6",
+      "ATTACK",
+    ]);
+    expect(damage.animationPending).toBe(true);
+    expect(d6.revision).toBe(damage.revision);
+    clock.mockReturnValue(damage.animationUntil! + 1);
+    await api.finishAnimation(f.host.session.token, damage.revision);
+    await api.execute(
+      f.one.token,
+      command(damage.revision, "END_TURN"),
+      f.online,
+    );
     expect((await api.readGame(g.id)).activePlayerId).toBe(f.two.playerId);
   } finally {
     clock.mockRestore();

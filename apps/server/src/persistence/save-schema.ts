@@ -2,7 +2,7 @@ import { z } from "zod";
 const integer = z.number().int().nonnegative();
 const coordinate = z.number().int();
 const point = { x: coordinate, y: coordinate };
-const slot = z.enum(["helmet", "gloves", "pants", "chest"]);
+const slot = z.enum(["helmet", "chest", "weapon", "boots", "gloves", "pants"]);
 const stats = z.object({
   maxHp: integer.positive(),
   accuracy: integer,
@@ -13,13 +13,27 @@ const stats = z.object({
   range: integer,
   damageType: z.enum(["physical", "magic"]),
   damageMultiplier: z.number().positive(),
+  physicalDamage: integer.max(10).optional(),
+  magicDamage: integer.max(10).optional(),
 });
 export const saveSchema = z.object({
+  itemClassRulesVersion: z.literal(1).optional(),
+  potionSlotsVersion: z.literal(1).optional(),
+  paladinShieldVersion: z.literal(1).optional(),
   id: z.string(),
   code: z.string(),
   revision: integer,
   animationUntil: integer.optional(),
   animationPending: z.boolean().optional(),
+  pendingAttack: z
+    .object({
+      actorId: z.string(),
+      targetId: z.string(),
+      ability: z.enum(["basic", "special", "ultimate"]),
+      d20: z.number().int().min(1).max(20),
+    })
+    .nullable()
+    .optional(),
   saveSchemaVersion: z.literal(2),
   rulesVersion: z.literal("0.5-demo"),
   contentVersion: z.string(),
@@ -42,11 +56,14 @@ export const saveSchema = z.object({
         stats,
         ...point,
         inventory: z.array(z.string().nullable()).length(4),
+        potions: z.array(z.string().nullable()).length(4).optional(),
         equipment: z.object({
           helmet: z.string().nullable(),
+          chest: z.string().nullable(),
+          weapon: z.string().nullable().default(null),
+          boots: z.string().nullable().default(null),
           gloves: z.string().nullable(),
           pants: z.string().nullable(),
-          chest: z.string().nullable(),
         }),
       }),
     )
@@ -77,6 +94,18 @@ export const saveSchema = z.object({
       ...point,
     }),
   ),
+  interactables: z
+    .array(
+      z.object({
+        id: z.string(),
+        kind: z.string(),
+        name: z.string(),
+        itemDefinition: z.string(),
+        used: z.boolean(),
+        ...point,
+      }),
+    )
+    .default([]),
   zones: z.array(
     z.object({
       id: z.string(),
@@ -97,6 +126,8 @@ export const saveSchema = z.object({
       resistance: integer,
       heal: integer,
       restoreResource: integer.max(300),
+      physicalDamage: integer.optional(),
+      magicDamage: integer.optional(),
     }),
   ),
   map: z.object({

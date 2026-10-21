@@ -63,9 +63,10 @@ export class CampaignRoom extends Room {
         if (
           auth.role === "PLAYER" &&
           auth.playerId === game.activePlayerId &&
-          game.enemies.some((e) => e.id === payload)
+          (payload === null ||
+            game.enemies.some((e) => e.id === payload && e.hp > 0))
         ) {
-          this.selectedTarget = payload as string;
+          this.selectedTarget = payload as string | null;
           await this.refresh();
         }
       } catch {

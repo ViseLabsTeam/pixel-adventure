@@ -1,6 +1,6 @@
 # Assets del mago
 
-Inventario revisado el **16 de octubre de 2026**. Siete GIFs disponibles. Se comparan con las siete categorías del [paladín](../paladin/README.md), usando la distinción entre recurso ausente y acción pendiente de asignar del [inventario general](../../docs/assets.md).
+Inventario revisado el **19 de octubre de 2026**. Ocho GIFs disponibles. Se comparan con las siete categorías del [paladín](../paladin/README.md), usando la distinción entre recurso ausente y acción pendiente de asignar del [inventario general](../../docs/assets.md).
 
 ## Archivos disponibles
 
@@ -8,6 +8,7 @@ Todos tienen un lienzo de **720 × 486** y transparencia declarada. La duración
 
 | Archivo | Fotogramas | Duración | Contenido observado |
 | --- | ---: | ---: | --- |
+| [animacion_pasiva.gif](animacion_pasiva.gif) | 84 | 3,45 s | Reposo/pasiva; nueva fuente del retrato animado. |
 | [caminata.gif](caminata.gif) | 31 | 1,25 s | Caminata del mago de perfil; eje lógico pendiente. |
 | [caminata_w.gif](caminata_w.gif) | 79 | 3,25 s | Vista de espalda, subida (W, −Y). |
 | [caminata_s.gif](caminata_s.gif) | 36 | 1,45 s | Vista frontal, bajada (S, +Y). |
@@ -18,9 +19,7 @@ Todos tienen un lienzo de **720 × 486** y transparencia declarada. La duración
 
 ## Recursos faltantes
 
-Se identifica **una categoría sin un recurso dedicado**:
-
-- Reposo / animación pasiva, equivalente a `animascion_pasiva.gif` del paladín.
+El reposo/pasiva ya está disponible en `animacion_pasiva.gif`; se procesa para generar el retrato animado. Las poses de espera incluidas al principio de los lanzamientos no se consideran automáticamente una animación de reposo independiente.
 
 Las poses de espera incluidas al principio de los lanzamientos no se consideran automáticamente una animación de reposo independiente. Los nuevos archivos `caminata_w.gif` y `caminata_s.gif` usan minúsculas; sus vistas se verificaron antes de asignar los ejes.
 

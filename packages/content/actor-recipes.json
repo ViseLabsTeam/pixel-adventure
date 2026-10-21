@@ -16,10 +16,11 @@
     },
     "warrior": {
       "folder": "guerrero",
-      "portraitSource": "indie.gif",
+      "portraitSource": "animacion_pasiva.gif",
       "height": 105,
       "clips": {
-        "idle": "indie.gif",
+        "idle": "animacion_pasiva.gif",
+        "walk": "caminata_s.gif",
         "walkUp": "caminata_w.gif",
         "walkDown": "caminata_s.gif",
         "basic": "corte.gif",
@@ -29,9 +30,10 @@
     },
     "mage": {
       "folder": "mago",
-      "portraitSource": "bola_de_fuego_.gif",
+      "portraitSource": "animacion_pasiva.gif",
       "height": 105,
       "clips": {
+        "idle": "animacion_pasiva.gif",
         "walk": "caminata.gif",
         "walkUp": "caminata_w.gif",
         "walkDown": "caminata_s.gif",
@@ -42,9 +44,10 @@
     },
     "archer": {
       "folder": "arquera",
-      "portraitSource": "basico_.gif",
+      "portraitSource": "animacion_pasiva.gif",
       "height": 105,
       "clips": {
+        "idle": "animacion_pasiva.gif",
         "walk": "caminata_.gif",
         "walkUp": "caminata_w.gif",
         "walkDown": "caminata_s.gif",

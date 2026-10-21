@@ -22,11 +22,25 @@ export function Lobby({
 }) {
   const { game, connected, pending, command } = connection;
   const [reveal, setReveal] = useState(false),
-    [shareOrigin, setShareOrigin] = useState(location.origin);
+    [shareOrigin, setShareOrigin] = useState(
+      import.meta.env.VITE_SHARE_ORIGIN || location.origin,
+    );
   if (!game) return <div className="loading">Preparando la mesa…</div>;
   const isHost = session.role === "COORDINATOR",
     me = game.players.find((p) => p.id === session.playerId),
     joinUrl = `${shareOrigin.replace(/\/$/, "")}/#/join/${game.code}`;
+  let usableAddress = false;
+  try {
+    const address = new URL(shareOrigin);
+    usableAddress =
+      ["http:", "https:"].includes(address.protocol) &&
+      !["localhost", "127.0.0.1", "[::1]"].includes(address.hostname) &&
+      address.pathname === "/" &&
+      !address.search &&
+      !address.hash;
+  } catch {
+    // Keep the address editable while the user is typing.
+  }
   return (
     <main className="lobby">
       <div className="section-heading">
@@ -134,34 +148,48 @@ export function Lobby({
         <aside>
           <section className="panel invitation">
             <span className="eyebrow">INVITACIÓN A LA MESA</span>
-            <p>Escaneá desde tu celular</p>
-            <div className="qr">
-              <QRCodeSVG
-                value={joinUrl}
-                size={146}
-                bgColor="#f3ecd9"
-                fgColor="#15221c"
-              />
-            </div>
+            <p>Conectá el celular a la misma red Wi-Fi.</p>
+            {usableAddress ? (
+              <div className="qr">
+                <QRCodeSVG
+                  value={joinUrl}
+                  size={146}
+                  bgColor="#f3ecd9"
+                  fgColor="#15221c"
+                  title="Invitación a la mesa"
+                />
+              </div>
+            ) : (
+              <p role="alert">
+                Ingresá la IP de esta computadora. localhost solo funciona en
+                esta pantalla.
+              </p>
+            )}
             <span className="room-code" data-testid="room-code">
               {game.code}
             </span>
-            <CopyButton text={joinUrl} label="Copiar invitación" />
-            <details>
-              <summary>Conectar celulares en la misma red</summary>
-              <p>
-                Si abriste localhost, reemplazalo por la IP de la computadora.
-                Mantené el puerto.
-              </p>
+            {usableAddress && (
+              <>
+                <a className="invitation-url" href={joinUrl}>
+                  {joinUrl}
+                </a>
+                <CopyButton text={joinUrl} label="Copiar invitación" />
+              </>
+            )}
+            <div className="invitation-address">
               <label>
-                Dirección de la pantalla
+                Dirección para celulares
                 <input
                   value={shareOrigin}
                   onChange={(e) => setShareOrigin(e.target.value)}
                   placeholder="http://192.168.1.10:8088"
                 />
               </label>
-            </details>
+              <p>
+                Usá la IP de la computadora y mantené el puerto. El QR se
+                actualiza al editarla.
+              </p>
+            </div>
           </section>
           {isHost && recoveryCode && (
             <section className="panel private-code">

@@ -1,6 +1,6 @@
 # Demo implementada: contrato y políticas de prueba
 
-Revisión: 19 de octubre de 2026. Versión de aplicación 0.1.0, reglas de demo `0.5-demo`, contenido `prototype-content-0.3.0`, formato de guardado `2`. Ver [arranque](../README.md) y [evidencia](estado-mvp.md).
+Revisión: 21 de octubre de 2026. Versión de aplicación 0.1.0, reglas de demo `0.5-demo`, contenido `prototype-content-0.3.0`, formato de guardado `2`. Ver [arranque](../README.md) y [evidencia](estado-mvp.md).
 
 ## Flujo disponible
 
@@ -8,40 +8,62 @@ Inicio → crear mesa o unirse → lobby → encuentro → resultado. De dos a c
 
 El control móvil tiene dos vistas que caben en la pantalla sin desplazamiento: **Personaje** reúne retrato, salud, estadísticas, dados disponibles según turno, flechas, ataque básico, especial y ulti; **Inventario** reúne cuatro espacios de bolsa y las cuatro ranuras de equipo. Los cofres y zonas adyacentes muestran una acción contextual en Personaje, sin el bloque «A tu alrededor». Solo el tablero compartido muestra posiciones y desplazamientos. Los efectos de ataques son temporales y aprobados para la demo.
 
-La bolsa tiene cuatro referencias de ítem. El equipo tiene casco, guantes, pantalones y pechera, con una referencia por ranura. Equipar intercambia el ítem de bolsa por el de esa ranura; desequipar requiere un espacio libre. El propietario e ID se conservan. La apariencia depende de la clase, nunca del equipo.
+La composición móvil sigue `ui celular.jpeg` (referencia externa al repositorio): ficha y recurso arriba; Movimiento y Tu acción comparten una fila debajo. Las cuatro casillas de pociones ocupan un contenedor horizontal bajo esos paneles. La bolsa 2 × 2 y el equipo aparecen junto al personaje en la otra pestaña. Se retiró el botón de terminar movimiento de la vista; atacar, interactuar, usar un objeto o finalizar turno cierran el movimiento según la acción. La ficha muestra ocho atributos puntuados —precisión, esquive, agilidad, defensa física, resistencia mágica, alcance y potencias física/mágica— con símbolos en dos columnas. La barra de vida muestra HP actuales y máximos. Los atributos base se representan en escala 0–10; el equipo se suma después del límite y puede superar 10. Las potencias y crecimientos por clase son fixtures de demo; el sistema de experiencia aún no aplica nuevos niveles durante la partida. Paladín y guerrero muestran en la ficha derivados animados de reposo; mago y arquera usan el retrato estático disponible.
+
+La lista de ataque del control muestra únicamente enemigos vivos a seis casillas o menos, contando pasos horizontales y verticales desde el personaje. Se ordenan por cercanía y se recalcula al moverse o cuando cambia su vida. Si no hay ninguno, el control indica que no percibe enemigos cercanos. Esta lista no altera el alcance de las armas ni las comprobaciones de trayectoria que decide el servidor.
+
+La bolsa tiene cuatro referencias de equipo y las pociones tienen cuatro casillas independientes. El equipo nuevo tiene casco, pechera, arma y botas, con una referencia por ranura. El inventario coloca casco arriba de pechera, arma a su derecha y botas debajo. Las campañas anteriores conservan guantes y pantalones equipados y pueden desequiparlos. Equipar intercambia el ítem de bolsa por el de esa ranura; desequipar requiere un espacio libre. El propietario e ID se conservan. La apariencia depende de la clase, nunca del equipo.
+
+Al tocar una pieza de la bolsa o una poción de Personaje se abre una ventana con sus acciones y los botones **Cancelar** y **Confirmar**. Elegir **Descartar** cambia el aviso y exige **Confirmar descartar**: el objeto se elimina definitivamente de su casilla. Para desequipar se toca la ranura ocupada y se confirma; con bolsa llena la confirmación queda deshabilitada y se explica que hay que liberar espacio. Equipar una ranura ocupada muestra qué pieza volverá exactamente al espacio de la pieza nueva; funciona también con bolsa llena. Usar una poción también pide confirmación. Cancelar o presionar Escape no gasta la acción. Si cambia el estado o turno, se cierra la ventana para revisar la intención otra vez; la confirmación conserva la revisión revisada y no se envía contra un estado más reciente sin volver a revisar.
+
+En esta demo, equipar, desequipar, consumir y descartar gastan la acción y cierran el movimiento al confirmarse. `DISCARD_ITEM` acepta un objeto propio presente en la bolsa o las casillas de pociones; una pieza equipada debe desequiparse primero. El servidor elimina la referencia y el objeto en la misma transacción que el recibo y el evento. Reintentar un descarte confirmado recupera su recibo; un fallo de guardado conserva el objeto y el espacio originales. Eliminar botín no reinicia el cofre ni el interactuable que lo generó.
+
+Todo equipo del [catálogo](../packages/content/src/items.ts) pertenece a una sola clase mediante `allowedClasses`. El servidor valida la posesión, el equipo inicial, reparto de cofres, recolección, equipar y desequipar. Un cofre entrega su objeto al primer vivo compatible con espacio en las casillas correspondientes; si no hay espacio o destinatario compatible, conserva el objeto junto al cofre con el mismo ID. Intentar recoger equipo de otra clase devuelve `ITEM_WRONG_CLASS` sin gastar la acción ni modificar el botín. Las pociones de demo son consumibles comunes, compatibles con las cuatro clases. Una bolsa llena no impide recibir pociones si hay una casilla de poción libre.
+
+Los guardados incorporan `itemClassRulesVersion: 1`. Al iniciar el servidor, la actualización transaccional respalda cada snapshot anterior en `campaign_save_backups` con la etiqueta `class-items-v1` y convierte el equipo genérico antiguo en la variante de su propietario. Conserva identidades de ítems, referencias de bolsa/equipo, turno, revisión y recibos. La espada genérica antigua de un mago pasa a bastón, con el mismo bono numérico aplicado al atributo mágico. La actualización es idempotente y revierte tanto el respaldo como los cambios si falla el guardado. Un snapshot moderno que contenga equipo de otra clase es rechazado.
+
+Los guardados actuales incorporan `potionSlotsVersion: 1` y cuatro casillas `potions` por personaje. Al iniciar, una migración transaccional guarda el snapshot anterior como `potion-slots-v1` y mueve las pociones que estaban en la bolsa a las casillas nuevas, conservando ID, propietario, revisión y recibos. El cupo de pociones y el de equipo se validan por separado. Los futuros tipos de poción usarán estas casillas; sus efectos y valores todavía no están definidos.
+
+El paladín equipa un escudo de prueba en la ranura `weapon` y el catálogo ya no le ofrece espada. El escudo conserva el bono físico temporal de +2 usado por el ataque con escudo. Los guardados anteriores incorporan `paladinShieldVersion: 1`: la migración `paladin-shield-v1` convierte la antigua definición `rusty-sword` del paladín en `paladin-shield`, con respaldo y sin cambiar el ID de instancia, las referencias, la revisión ni los recibos.
 
 ## Fixtures del encuentro
 
 Fuente ejecutable: [prototype.ts](../packages/content/src/prototype.ts). No es balance definitivo.
 
-| Clase | Vida | Precisión | Esquive | Agilidad | Defensa | Resistencia | Alcance |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Paladín | 60 | 7 | 3 | 3 | 6 | 2 | 1 |
-| Guerrero | 48 | 8 | 4 | 5 | 3 | 1 | 1 |
-| Mago | 32 | 8 | 4 | 4 | 1 | 6 | 2 |
-| Arquera | 34 | 9 | 6 | 7 | 1 | 2 | 3 |
+| Clase    | Vida | Precisión | Esquive | Agilidad | Defensa | Resistencia | Alcance |
+| -------- | ---: | --------: | ------: | -------: | ------: | ----------: | ------: |
+| Paladín  |   60 |         7 |       3 |        3 |       6 |           2 |       1 |
+| Guerrero |   48 |         8 |       4 |        5 |       3 |           1 |       1 |
+| Mago     |   32 |         8 |       4 |        4 |       1 |           6 |       2 |
+| Arquera  |   34 |         9 |       6 |        7 |       1 |           2 |       3 |
 
-El escenario usa 58 × 70 casillas lógicas, con una ventana inicial de unas 10 × 10, cámara que sigue al personaje activo, cuatro bloqueos sólidos, tres enemigos ya alertados, cuatro cofres, una fuente y una salida. La silueta transitable provisional se genera desde el PNG; sus objetos individuales no definen colisiones. El eje vertical crece hacia abajo; las flechas envían pasos cardinales. `caminata_W.gif` muestra subida (−Y), `caminata_s.gif` bajada (+Y), y la caminata lateral se refleja a la izquierda.
+El escenario usa 58 × 70 casillas lógicas, con una ventana inicial de unas 10 × 10, cámara que sigue al personaje activo, 30 enemigos ya alertados, 11 cofres, una fuente y una salida. La silueta transitable provisional se genera desde el PNG. [collision.json](../assets/mapas/collision.json) registra la base de los muros y los troncos: solo esas casillas bloquean movimiento y ataques; las piedras del piso y las escaleras quedan libres. Los cuadrados sólidos de prueba dejaron de dibujarse. Las copas se superponen a los personajes según la posición de sus pies. El eje vertical crece hacia abajo; las flechas envían pasos cardinales. `caminata_W.gif` muestra subida (−Y), `caminata_s.gif` bajada (+Y), y la caminata lateral se refleja a la izquierda.
+
+El nuevo preset se aplica al crear una campaña. Las campañas ya guardadas mantienen su arreglo de bloqueos persistido. El editor local `/map-editor.html` de Vite permite corregir el JSON; agregar otro mapa al juego requiere conectarlo expresamente al contenido. El trazado de prueba actual procede de [collisionV2.json](../assets/mapas/collisionV2.json): conserva 1197 casillas bloqueadas y seis copas generadas; el árbol noroeste no tiene silueta y tres árboles todavía no tienen tronco marcado. V2 incluye 15 centinelas, un eco errante y 14 goblins; las cuatro apariciones conservan sus coordenadas anteriores.
+
+El editor permite agregar y mover apariciones de enemigos del [catálogo compartido](../packages/content/enemy-recipes.json), por arrastre, coordenadas o lista de selección. `collision.json` guarda sus IDs, tipos y posiciones; el generador alimenta el preset de partidas nuevas con esa lista. Los JSON antiguos sin enemigos conservan los tres originales de demo; una lista vacía explícita los elimina. Las campañas guardadas conservan sus enemigos y estado persistido. El editor no agrega estadísticas ni habilidades al colocar una aparición.
+
+El editor registra también cuatro apariciones, cofres con objeto de botín e interactuables. La demo incluye ocho plantas de prueba que entregan una poción al personaje adyacente: se usa una vez, exige espacio libre en las casillas de pociones y consume la acción. Pueden estar dibujadas sobre un obstáculo si se alcanzan desde una casilla vecina. `object-5` aún no tiene ninguna casilla accesible adyacente en collisionV2; queda pendiente corregirlo en el editor. Su estado y la identidad del objeto quedan guardados. Los guardados anteriores sin esta lista se recuperan con lista vacía. Esta política no define el comportamiento de palancas u otros mecanismos.
 
 - Centinela: 24 de vida, alcance 1, movimiento 1. Eco: 18 de vida, alcance 2, movimiento 1. Ataques enemigos físicos; persiguen al vivo más cercano, desempate por slot, sin búsqueda de caminos completa.
-- Cada personaje empieza con poción (+12 vida y +1/3 recurso), pantalones (+1 defensa) y pechera (+2 defensa, +1 resistencia) para probar equipo desde el inicio.
-- Los cofres entregan casco (+2 defensa), guantes (+2 resistencia), pantalones o pechera. Tras limpiar, se asignan por orden al primer vivo con espacio; si no hay espacio quedan asociados al cofre y pueden recogerse cerca.
+- Cada personaje empieza con poción (+12 vida y +1/3 recurso), botas de su clase (+1 defensa), equipo de su ranura `weapon` (+2 al atributo de daño físico o mágico) y pechera de su clase (+2 defensa, +1 resistencia). Paladín recibe escudo, guerrero espada, mago bastón y arquera arco. Son valores provisionales de prueba.
+- Los 11 cofres de collisionV2 entregan una poción cada uno. El catálogo mantiene casco y variantes de clase del equipo anterior para campañas guardadas. Tras limpiar, se asignan por orden al primer vivo compatible con espacio; si no hay espacio o destinatario compatible quedan asociados al cofre y pueden recogerse cerca por la clase correspondiente.
 - La fuente cura 8 una vez por personaje en este encuentro.
 
 ### Políticas temporales
 
-| Tema | Implementación de esta demo |
-| --- | --- |
-| Distancia | Manhattan. |
-| Trayectoria | Muestreo de la línea entre centros; bloqueada por los muros lógicos. No hay cobertura parcial ni visión orientada. |
-| Redondeo y defensa | Piso tras multiplicar, luego defensa plana, mínimo cero. |
-| Omisiones | Se permite terminar movimiento o turno sin gastar todo. |
-| Acciones | Atacar, equipar, desequipar, consumir e interactuar cierran movimiento y gastan la acción. Fallar un ataque también la consume. |
-| Cofres | Sin apertura durante combate/exploración. Se abren al limpiar; no hay riesgo, mímicos ni tablas de un tercio en este preset. |
-| Salida | Finaliza la demo al limpiar el patio. No representa cruce individual ni cambio de stage. |
-| Enemigos | La fase enemiga completa se confirma atómicamente con el fin del último turno. No existe un estado intermedio de enemigo persistido. |
-| Desconexión | La ausencia del actor activo pausa los controles; no se salta su turno. |
-| Resultado terminal | Se conserva en PostgreSQL; sus comandos de juego quedan bloqueados. Se puede crear otra mesa desde inicio. |
+| Tema               | Implementación de esta demo                                                                                                          |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Distancia          | Manhattan.                                                                                                                           |
+| Trayectoria        | Muestreo de la línea entre centros; bloqueada por los muros lógicos. No hay cobertura parcial ni visión orientada.                   |
+| Redondeo y defensa | Piso tras multiplicar, luego defensa plana, mínimo cero.                                                                             |
+| Omisiones          | Se permite terminar movimiento o turno sin gastar todo.                                                                              |
+| Acciones           | Atacar, equipar, desequipar, consumir e interactuar cierran movimiento y gastan la acción. Fallar un ataque también la consume.      |
+| Cofres             | Sin apertura durante combate/exploración. Se abren al limpiar; no hay riesgo, mímicos ni tablas de un tercio en este preset.         |
+| Salida             | Finaliza la demo al limpiar el patio. No representa cruce individual ni cambio de stage.                                             |
+| Enemigos           | La fase enemiga completa se confirma atómicamente con el fin del último turno. No existe un estado intermedio de enemigo persistido. |
+| Desconexión        | La ausencia del actor activo pausa los controles; no se salta su turno.                                                              |
+| Resultado terminal | Se conserva en PostgreSQL; sus comandos de juego quedan bloqueados. Se puede crear otra mesa desde inicio.                           |
 
 El helper de daño contempla el multiplicador de sigilo sin d6 adicional y tiene una prueba controlada. La detección, exploración y activación de ese beneficio durante una aventura quedan pendientes.
 
@@ -97,7 +119,7 @@ La ventana compartida sigue al personaje activo cuando se acerca al borde; los p
 
 La animación lateral, el reposo y el ataque miran a izquierda/derecha mediante reflejo horizontal. Las caminatas W suben y S bajan. Cada paso cardinal de las cuatro clases dura 2 s. El guerrero usa sus nuevas caminatas W/S; lateralmente conserva reposo y traslación porque falta ese GIF. Al atacar, primero termina el clip; entonces aparecen el daño o «Fallo» y la crónica. Tras 650 ms comienza a cambiar la barra de vida durante 450 ms, en el tablero y en las fichas. Un fallo conserva la vida. El servidor ya guarda el resultado autoritativo, pero espera estas fases visuales antes del próximo comando.
 
-Los GIF originales D6 y D20 aparecen arriba de la ficha del control móvil durante la tirada: D6 para movimiento y D20 más D6 para ataques. Se espera a que carguen y se reproducen al menos una pasada de 1,6 s. La mesa presenta los mismos dados sobre el mapa junto al nombre y clase del actor, incluidos los enemigos cuando atacan. Muestra el resultado o fallo después de la tirada y, en combate, del ataque; no inventa cifras para los fallos. Cada evento nuevo se presenta una vez, y los varios ataques enemigos de una fase pasan en secuencia. El resultado confirmado permanece en el control hasta terminar el turno y queda en la crónica de la mesa. Los botones usan derivados estáticos; reducir movimiento omite la reproducción visual. La pantalla compartida confirma el tiempo de la tirada de movimiento y el servidor mantiene el mínimo antes de permitir el siguiente paso.
+Los GIF originales D6 y D20 aparecen en una capa sobre Personaje durante cada tirada y en la mesa junto al actor. El botón D6 de movimiento se ubica sobre las flechas. Debajo de las habilidades hay dos botones con la forma visual de los dados: D20 y D6. El jugador selecciona objetivo y habilidad, tira D20 y ve el resultado; la comprobación porcentual de impacto sigue siendo independiente. Si falla, se muestra «Falló el ataque» y termina la acción. Si acierta, el servidor guarda el D20 como base, habilita D6 tras la presentación de la primera tirada y calcula el daño con el segundo comando. Se muestra el resultado final del D6, luego se reproduce el clip de ataque y finalmente aparecen daño y cambio de vida. La capa móvil se cierra tras mostrar cada resultado. El estado `pendingAttack` conserva actor, objetivo, habilidad y D20 entre los comandos; el recibo impide repetir tiradas o gastos al reintentar. Las partidas anteriores sin este campo siguen siendo válidas. Los ataques enemigos continúan con su presentación anterior. Cada GIF se reproduce al menos una pasada de 1,6 s; reducir movimiento omite la reproducción visual, pero el servidor mantiene el tiempo mínimo antes de habilitar la siguiente acción.
 
 En teléfonos altos, el retrato crece en la vista Personaje hasta aprovechar el espacio que dejan los controles; Inventario coloca un retrato grande debajo del equipo. En teléfonos bajos conserva el tamaño necesario para que los botones y ranuras sigan en una sola pantalla.
 

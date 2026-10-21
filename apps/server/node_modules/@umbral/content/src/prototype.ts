@@ -1,40 +1,21 @@
 // Fixtures versionados. No representan el balance definitivo.
 import { courtyardTerrain } from "./courtyard-terrain";
-export const enemyRecipes = {
-  sentinel: {
-    name: "Centinela del umbral",
-    maxHp: 24,
-    defense: 2,
-    resistance: 1,
-    accuracy: 5,
-    dodge: 3,
-    agility: 2,
-    range: 1,
-    movement: 1,
-  },
-  wisp: {
-    name: "Eco errante",
-    maxHp: 18,
-    defense: 1,
-    resistance: 2,
-    accuracy: 4,
-    dodge: 3,
-    agility: 3,
-    range: 2,
-    movement: 1,
-  },
-  goblin: {
-    name: "Goblin de las ruinas",
-    maxHp: 20,
-    defense: 1,
-    resistance: 1,
-    accuracy: 5,
-    dodge: 4,
-    agility: 4,
-    range: 1,
-    movement: 1,
-  },
-} as const;
+import { courtyardCollision } from "./courtyard-collision";
+import {
+  courtyardSpawns,
+  courtyardChests,
+  courtyardInteractables,
+  courtyardEnemies,
+} from "./courtyard-placements";
+import enemyRecipes from "../enemy-recipes.json";
+import { itemDefinitions, starterItems, legacyClassItems } from "./items";
+export { enemyRecipes };
+const enemyPlacements: readonly {
+  id: string;
+  archetypeId: keyof typeof enemyRecipes;
+  x: number;
+  y: number;
+}[] = courtyardEnemies;
 export function spawnEnemy(
   archetypeId: keyof typeof enemyRecipes,
   x: number,
@@ -57,6 +38,8 @@ export const prototype = {
       range: 1,
       damageType: "physical" as const,
       damageMultiplier: 0.65,
+      physicalDamage: 4,
+      magicDamage: 0,
     },
     warrior: {
       maxHp: 48,
@@ -64,6 +47,8 @@ export const prototype = {
       dodge: 4,
       agility: 5,
       damageMultiplier: 1,
+      physicalDamage: 7,
+      magicDamage: 0,
       defense: 3,
       resistance: 1,
       range: 1,
@@ -79,6 +64,8 @@ export const prototype = {
       range: 2,
       damageType: "magic" as const,
       damageMultiplier: 1.35,
+      physicalDamage: 1,
+      magicDamage: 9,
     },
     archer: {
       maxHp: 34,
@@ -90,6 +77,8 @@ export const prototype = {
       range: 3,
       damageType: "physical" as const,
       damageMultiplier: 1.2,
+      physicalDamage: 8,
+      magicDamage: 0,
     },
   },
   map: {
@@ -98,48 +87,17 @@ export const prototype = {
     width: 58,
     height: 70,
     terrain: courtyardTerrain,
-    walls: [
-      { x: 4, y: 3 },
-      { x: 4, y: 4 },
-      { x: 5, y: 4 },
-      { x: 1, y: 2 },
-    ],
-    spawns: [
-      { x: 2, y: 8 },
-      { x: 3, y: 8 },
-      { x: 4, y: 8 },
-      { x: 5, y: 8 },
-    ],
+    walls: courtyardCollision.map(({ x, y }) => ({ x, y })),
+    spawns: courtyardSpawns.map(({ x, y }) => ({ x, y })),
   },
-  enemies: [
-    spawnEnemy("sentinel", 3, 5),
-    spawnEnemy("wisp", 7, 4),
-    spawnEnemy("goblin", 12, 6),
-  ],
-  chests: [
-    { id: "chest-1", x: 2, y: 6, opened: false, itemDefinition: "iron-helmet" },
-    {
-      id: "chest-2",
-      x: 7,
-      y: 6,
-      opened: false,
-      itemDefinition: "cloth-gloves",
-    },
-    {
-      id: "chest-3",
-      x: 1,
-      y: 5,
-      opened: false,
-      itemDefinition: "travel-pants",
-    },
-    {
-      id: "chest-4",
-      x: 8,
-      y: 3,
-      opened: false,
-      itemDefinition: "old-chestplate",
-    },
-  ],
+  enemies: enemyPlacements.map(({ archetypeId, x, y, id }) =>
+    spawnEnemy(archetypeId, x, y, id),
+  ),
+  chests: courtyardChests.map((chest) => ({ ...chest, opened: false })),
+  interactables: courtyardInteractables.map((object) => ({
+    ...object,
+    used: false,
+  })),
   zones: [
     {
       id: "fountain",
@@ -156,48 +114,9 @@ export const prototype = {
       kind: "exit" as const,
     },
   ],
-  items: {
-    potion: {
-      name: "Poción menor",
-      slot: null,
-      defense: 0,
-      resistance: 0,
-      heal: 12,
-      restoreResource: 100,
-    },
-    "iron-helmet": {
-      name: "Yelmo de hierro",
-      slot: "helmet" as const,
-      defense: 2,
-      resistance: 0,
-      heal: 0,
-      restoreResource: 0,
-    },
-    "cloth-gloves": {
-      name: "Guantes del eco",
-      slot: "gloves" as const,
-      defense: 0,
-      resistance: 2,
-      heal: 0,
-      restoreResource: 0,
-    },
-    "travel-pants": {
-      name: "Pantalones de viaje",
-      slot: "pants" as const,
-      defense: 1,
-      resistance: 0,
-      heal: 0,
-      restoreResource: 0,
-    },
-    "old-chestplate": {
-      name: "Pechera antigua",
-      slot: "chest" as const,
-      defense: 2,
-      resistance: 1,
-      heal: 0,
-      restoreResource: 0,
-    },
-  },
+  items: itemDefinitions,
+  starterItems,
+  legacyClassItems,
   resource: {
     max: 300,
     initial: 100,
@@ -216,3 +135,75 @@ export const prototype = {
     chestLootAfterClearOnly: true,
   } as const,
 };
+
+// Progresión provisional para cuando la campaña incorpore experiencia y niveles.
+// El nivel 1 usa exactamente las cifras del fixture actual.
+export const classGrowth = {
+  paladin: {
+    maxHp: 8,
+    accuracy: 0.35,
+    dodge: 0.2,
+    agility: 0.2,
+    defense: 0.8,
+    resistance: 0.4,
+    physicalDamage: 0.35,
+    magicDamage: 0,
+  },
+  warrior: {
+    maxHp: 6,
+    accuracy: 0.5,
+    dodge: 0.4,
+    agility: 0.5,
+    defense: 0.45,
+    resistance: 0.2,
+    physicalDamage: 0.75,
+    magicDamage: 0,
+  },
+  mage: {
+    maxHp: 4,
+    accuracy: 0.5,
+    dodge: 0.3,
+    agility: 0.3,
+    defense: 0.2,
+    resistance: 0.75,
+    physicalDamage: 0.1,
+    magicDamage: 0.8,
+  },
+  archer: {
+    maxHp: 4,
+    accuracy: 0.65,
+    dodge: 0.6,
+    agility: 0.7,
+    defense: 0.2,
+    resistance: 0.3,
+    physicalDamage: 0.7,
+    magicDamage: 0,
+  },
+} as const;
+
+export function statsAtLevel(
+  classId: keyof typeof prototype.classes,
+  level: number,
+) {
+  if (!Number.isInteger(level) || level < 1)
+    throw new RangeError("Nivel inválido");
+  const base = prototype.classes[classId];
+  const growth = classGrowth[classId];
+  const score = (key: Exclude<keyof typeof growth, "maxHp">) =>
+    Math.min(10, base[key] + Math.floor((level - 1) * growth[key]));
+  const damageKey =
+    base.damageType === "magic" ? "magicDamage" : "physicalDamage";
+  return {
+    ...base,
+    maxHp: base.maxHp + (level - 1) * growth.maxHp,
+    accuracy: score("accuracy"),
+    dodge: score("dodge"),
+    agility: score("agility"),
+    defense: score("defense"),
+    resistance: score("resistance"),
+    physicalDamage: score("physicalDamage"),
+    magicDamage: score("magicDamage"),
+    damageMultiplier:
+      (base.damageMultiplier * score(damageKey)) / base[damageKey],
+  };
+}

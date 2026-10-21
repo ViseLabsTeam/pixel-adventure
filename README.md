@@ -1,6 +1,6 @@
 # Umbral — RPG cooperativo web
 
-Demo local para **2 a 4 jugadores**. Una pantalla compartida muestra el tablero; cada celular muestra su ficha y envía acciones. Revisado el **19 de octubre de 2026**.
+Demo local para **2 a 4 jugadores**. Una pantalla compartida muestra el tablero; cada celular muestra su ficha y envía acciones. Revisado el **21 de octubre de 2026**.
 
 ## Probar con Docker
 
@@ -22,10 +22,10 @@ Los valores predeterminados son para desarrollo local. `.env.example` documenta 
 1. En la notebook/TV, elegí **Crear una partida**. La pantalla compartida no ocupa un jugador.
 2. Conservá el **código privado de recuperación** del lobby; es distinto del código público de invitación.
 3. En cada celular, abrí la IP local de esa computadora con el puerto 8088, por ejemplo `http://192.168.1.10:8088`. Ambos dispositivos deben estar en la misma red y el firewall debe permitir ese puerto.
-4. Elegí **Unirse a una partida**, ingresá el código público, nombre y personaje. También podés editar la dirección del QR en «Conectar celulares en la misma red». Un QR que contiene localhost apunta al propio teléfono.
-5. Con 2–3 viajeros conectados, el coordinador inicia. En el celular, **Personaje** reúne ficha, dados, movimiento y ataques; **Inventario** muestra bolsa y equipo en otra vista. Ambas caben en una pantalla móvil sin desplazar la página. **El tablero solo aparece en la pantalla compartida**.
+4. Elegí **Unirse a una partida**, ingresá el código público, nombre y personaje. El lobby muestra la **Dirección para celulares** y permite editarla; el QR requiere una dirección distinta de localhost. Para configurarla al construir Docker, agregá `SHARE_ORIGIN=http://IP-DE-LA-COMPUTADORA:8088` a `.env` y ejecutá `docker compose up -d --build web`. Si cambia la IP de la computadora, actualizá esa dirección.
+5. Con 2–3 viajeros conectados, el coordinador inicia. En el celular, **Personaje** reúne ficha, dados, movimiento y ataques; Movimiento y Tu acción aparecen uno al lado del otro, con cuatro pociones en una fila debajo. La lista de ataque muestra enemigos vivos a seis casillas o menos del personaje. **Inventario** muestra bolsa y equipo en otra vista. Ambas caben en una pantalla móvil sin desplazar la página. **El tablero solo aparece en la pantalla compartida**.
 
-Hay paladín, guerrero, mago y arquera. Cada clase se elige una sola vez por mesa: se reserva durante 30 segundos al seleccionarla, se renueva mientras el formulario esté abierto y queda ocupada al unirse. Una reserva abandonada vence. **Las estadísticas de la arquera son de prueba**: alcance 3, poca vida y daño físico alto. La bolsa tiene **4 espacios**, más **casco, guantes, pantalones y pechera**: el equipo modifica estadísticas y conserva la apariencia.
+Hay paladín, guerrero, mago y arquera. Cada clase se elige una sola vez por mesa: se reserva durante 30 segundos al seleccionarla, se renueva mientras el formulario esté abierto y queda ocupada al unirse. Una reserva abandonada vence. **Las estadísticas de la arquera son de prueba**: alcance 3, poca vida y daño físico alto. La bolsa tiene **4 espacios de equipo**, más **4 casillas de pociones** en una fila y las ranuras **casco, pechera, arma y botas**. Las pociones no ocupan la bolsa.
 
 ### Guardado y recuperación
 
@@ -37,13 +37,19 @@ Cada operación confirmada guarda snapshot, eventos y recibo juntos. Una recarga
 
 ## Alcance de esta demo
 
-Inicio, configuración local de sonido/volumen/animación/grilla, lobby con QR, controles móviles, tablero explorable con cámara, barras de vida, tres enemigos de prueba incluido el goblin, cuatro cofres y zonas de fuente/salida. Mapa a la derecha a alto completo, panel lateral izquierdo y barras de recursos por tercios. El tablero reproduce spritesheets derivados de los GIF para movimiento y ataques. La tirada D6/D20 aparece en el celular y en la mesa con el nombre de quien la hizo; el resultado se revela después de la animación. La ficha y el inventario móviles aprovechan el espacio disponible con un retrato ampliado. Detalles y fallbacks en docs/demo.md. El Anfitrión guía la expedición sin revelar la trama final.
+Inicio, configuración local de sonido/volumen/animación/grilla, lobby con QR, controles móviles, tablero explorable con cámara, barras de vida, 30 enemigos de prueba incluidos goblins, 11 cofres y zonas de fuente/salida. Las ubicaciones actuales proceden de `collisionV2.json`. Mapa a la derecha a alto completo, panel lateral izquierdo y barras de recursos por tercios. El tablero reproduce spritesheets derivados de los GIF para movimiento y ataques. La tirada D6/D20 aparece sobre Personaje y en la mesa con el nombre de quien la hizo; revela el resultado y después se cierra. La ficha y el inventario móviles aprovechan el espacio disponible con un retrato ampliado. Detalles y fallbacks en docs/demo.md. El Anfitrión guía la expedición sin revelar la trama final.
 
-Cada paso cardinal dura 2 segundos. En combate termina primero la animación de ataque, luego aparece el daño o fallo y después cambia la barra de vida; los ataques enemigos siguen el mismo orden. Un fallo no reduce vida.
+Cada paso cardinal dura 2 segundos. El D6 de movimiento está centrado sobre las flechas. Para atacar, elegí objetivo y habilidad (básico si no seleccionás otra), tocá el dado D20 y esperá su resultado. Si impacta, se habilita el dado D6 a su lado para calcular el daño final. Después se reproduce el ataque, aparece el daño y cambia la barra de vida. Si falla, se muestra el fallo tras el D20 y no se tira D6. Los ataques enemigos conservan su presentación actual. Un fallo no reduce vida.
+
+El equipo pertenece a una clase: el servidor impide recibir, guardar o equipar objetos de otra clase. El inicio entrega escudo al paladín, espada al guerrero, bastón al mago y arco a la arquera, además de botas y pechera propias. Las pociones son comunes. El botín exclusivo espera en su cofre si no hay un destinatario compatible con espacio. Los guardados anteriores se actualizan con respaldo, conservando los IDs de los objetos.
+
+Tocá una pieza de la bolsa para equipar o descartar, o una poción de Personaje para usar o descartar; después pulsá **Confirmar**. Tocá una pieza equipada para desequiparla; requiere espacio en la bolsa. Si equipás otra pieza en su lugar, la anterior vuelve al mismo espacio de bolsa de la nueva. Las acciones de inventario consumen la acción del turno; **Cancelar** o Escape conservan el estado. Descartar elimina el objeto definitivamente y muestra ese aviso antes de confirmar.
 
 El preset empieza en combate: distancia Manhattan, redondeo hacia abajo, daño mínimo cero y una acción por turno. Equipar, desequipar, consumir e interactuar gastan esa acción. Los cofres se abren tras eliminar los enemigos; el botín va al primer personaje vivo con espacio, o queda junto al cofre. La salida **termina el encuentro de demo**, no implementa la transición entre stages. Ver [políticas y valores](docs/demo.md).
 
 Pendientes: estadísticas y habilidades definitivas, orientaciones definitivas de animaciones, percepción/alarma/sigilo de la aventura, transferencias, progresión, altares, stages y revelación final. El cálculo de daño desde sigilo sí tiene un fixture unitario; no hay exploración con sigilo jugable todavía.
+
+La ficha móvil muestra ocho atributos con símbolos en dos columnas: precisión, esquive, agilidad, defensa física, resistencia mágica, alcance y daños físico/mágico. La barra de vida conserva los HP actuales y máximos. El límite de 10 corresponde a atributos base; el equipo puede aumentarlos por encima de 10. Hay una receta provisional de crecimiento distinta para cada clase, pero ganar niveles todavía no forma parte de la demo. El paladín y el guerrero usan retratos de reposo animados; el mago y la arquera esperan sus GIF de reposo. La caminata lateral del guerrero usa temporalmente su clip S reflejado hacia la izquierda hasta recibir un lateral propio.
 
 ## Desarrollo
 
@@ -61,15 +67,19 @@ En PowerShell podés usar `npx.cmd`. Si ya levantaste toda la demo Docker, deten
 
 Desarrollo: web **http://localhost:5173**, servidor interno **2567** y PostgreSQL **5434**. Vite redirige API y WebSockets al servidor. El backend toma `DATABASE_URL` del entorno; con los valores locales de Compose funciona sin configurarla. Si cambiás contraseña/puerto, exportá también la URL correspondiente. Docker Compose lee `.env`; el comando de desarrollo no lo carga automáticamente.
 
-| Script | Resultado |
-| --- | --- |
-| `pnpm check` | Tipos, pruebas unitarias, contenido y formato. |
-| `pnpm build` | Recursos derivados, tipos, bundle web y servidor. |
-| `pnpm test:integration` | Pruebas PostgreSQL sobre una base cuyo nombre termine en `_test`. |
-| `pnpm test:e2e` | Navegador contra la demo levantada; crea campañas de prueba. |
-| `pnpm assets:prepare` | Regenera retratos, escenario, animaciones, vistas de dados y manifiesto; conserva originales. |
-| `pnpm format` | Formatea código y pruebas. |
-| `pnpm docs:check` | Comprueba enlaces locales de Markdown. |
+El editor local de colisiones está en **http://localhost:5173/map-editor.html** durante desarrollo. Carga el PNG y el trazado de muros/troncos, permite corregir las siluetas de árboles y exporta un JSON para revisar e incorporar. Las partidas nuevas usan ese trazado; las guardadas conservan sus bloqueos.
+
+Para abrirlo, ubicar apariciones, agregar o mover enemigos del catálogo, colocar cofres y plantas recolectables, y aplicar el JSON al juego, seguí el [tutorial del editor](docs/tutorial-editor-mapas.md).
+
+| Script                  | Resultado                                                                                     |
+| ----------------------- | --------------------------------------------------------------------------------------------- |
+| `pnpm check`            | Tipos, pruebas unitarias, contenido y formato.                                                |
+| `pnpm build`            | Recursos derivados, tipos, bundle web y servidor.                                             |
+| `pnpm test:integration` | Pruebas PostgreSQL sobre una base cuyo nombre termine en `_test`.                             |
+| `pnpm test:e2e`         | Navegador contra la demo levantada; crea campañas de prueba.                                  |
+| `pnpm assets:prepare`   | Regenera retratos, escenario, animaciones, vistas de dados y manifiesto; conserva originales. |
+| `pnpm format`           | Formatea código y pruebas.                                                                    |
+| `pnpm docs:check`       | Comprueba enlaces locales de Markdown.                                                        |
 
 Para preparar integración, ejecutar una vez:
 
@@ -90,16 +100,16 @@ Puede cambiarse la conexión mediante `TEST_DATABASE_URL`. Las pruebas eliminan 
 - `assets/{paladin,guerrero,mago,arquera,enemigos,mapas,maestro,dados,fuentes}`: recursos por categoría; derivados dentro de `generated` cuando corresponde.
 - `infra`, `scripts`, `tests/e2e`: contenedores, herramientas y pruebas.
 
-| Documento | Contenido |
-| --- | --- |
-| [Reglas](rpg-cooperativo-reglas-v01.md) | Decisiones confirmadas y pendientes, contenido v0.4. |
-| [Especificación técnica](rpg-cooperativo-especificacion-tecnica.md) | Diseño completo y referencia al subconjunto implementado. |
-| [Brief](rpg-cooperativo-brief-mvp.md) | Alcance y criterios A01–A15. |
-| [Arquitectura](docs/arquitectura.md) | Estructura y dependencias. |
-| [Buenas prácticas](docs/buenas-practicas-desarrollo.md) | Convenciones y verificación. |
-| [Documentación](docs/documentacion.md) | Fuentes de verdad y mantenimiento. |
-| [Demo](docs/demo.md) | Contratos implementados, fixtures y límites. |
-| [Estado del MVP](docs/estado-mvp.md) | Evidencia, resultados y casos no comprobados. |
-| [Assets](docs/assets.md) | Inventario, recursos integrados y faltantes. |
-| [ADR inicial](docs/decisiones/0001-base-arquitectonica.md) / [ADR de la demo](docs/decisiones/0002-demo-persistente.md) | Decisiones y consecuencias. |
-| [AGENTS](AGENTS.md) | Instrucciones del repositorio. |
+| Documento                                                                                                               | Contenido                                                 |
+| ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| [Reglas](rpg-cooperativo-reglas-v01.md)                                                                                 | Decisiones confirmadas y pendientes, contenido v0.4.      |
+| [Especificación técnica](rpg-cooperativo-especificacion-tecnica.md)                                                     | Diseño completo y referencia al subconjunto implementado. |
+| [Brief](rpg-cooperativo-brief-mvp.md)                                                                                   | Alcance y criterios A01–A15.                              |
+| [Arquitectura](docs/arquitectura.md)                                                                                    | Estructura y dependencias.                                |
+| [Buenas prácticas](docs/buenas-practicas-desarrollo.md)                                                                 | Convenciones y verificación.                              |
+| [Documentación](docs/documentacion.md)                                                                                  | Fuentes de verdad y mantenimiento.                        |
+| [Demo](docs/demo.md)                                                                                                    | Contratos implementados, fixtures y límites.              |
+| [Estado del MVP](docs/estado-mvp.md)                                                                                    | Evidencia, resultados y casos no comprobados.             |
+| [Assets](docs/assets.md)                                                                                                | Inventario, recursos integrados y faltantes.              |
+| [ADR inicial](docs/decisiones/0001-base-arquitectonica.md) / [ADR de la demo](docs/decisiones/0002-demo-persistente.md) | Decisiones y consecuencias.                               |
+| [AGENTS](AGENTS.md)                                                                                                     | Instrucciones del repositorio.                            |

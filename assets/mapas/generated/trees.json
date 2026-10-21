@@ -1,0 +1,56 @@
+[
+  {
+    "id": "northeast",
+    "image": "mapas/generated/tree-northeast.png",
+    "left": 760,
+    "top": 124,
+    "width": 107,
+    "height": 137,
+    "footY": 260
+  },
+  {
+    "id": "west",
+    "image": "mapas/generated/tree-west.png",
+    "left": 166,
+    "top": 360,
+    "width": 95,
+    "height": 137,
+    "footY": 496
+  },
+  {
+    "id": "middle",
+    "image": "mapas/generated/tree-middle.png",
+    "left": 393,
+    "top": 423,
+    "width": 96,
+    "height": 131,
+    "footY": 553
+  },
+  {
+    "id": "south-center",
+    "image": "mapas/generated/tree-south-center.png",
+    "left": 510,
+    "top": 714,
+    "width": 96,
+    "height": 114,
+    "footY": 827
+  },
+  {
+    "id": "south",
+    "image": "mapas/generated/tree-south.png",
+    "left": 589,
+    "top": 936,
+    "width": 122,
+    "height": 130,
+    "footY": 1065
+  },
+  {
+    "id": "east",
+    "image": "mapas/generated/tree-east.png",
+    "left": 967,
+    "top": 584,
+    "width": 104,
+    "height": 127,
+    "footY": 710
+  }
+]

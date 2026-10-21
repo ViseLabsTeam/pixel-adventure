@@ -47,14 +47,19 @@ export const commandSchema = z.object({
       ability: z.enum(["basic", "special", "ultimate"]).optional(),
       targetId: z.string().min(1).max(80),
     }),
+    z.object({ type: z.literal("ROLL_ATTACK_D6") }),
     z.object({
       type: z.literal("INTERACT"),
       targetId: z.string().min(1).max(80),
     }),
     z.object({ type: z.literal("EQUIP"), itemId: z.string().min(1).max(100) }),
     z.object({
+      type: z.literal("DISCARD_ITEM"),
+      itemId: z.string().min(1).max(100),
+    }),
+    z.object({
       type: z.literal("UNEQUIP"),
-      slot: z.enum(["helmet", "gloves", "pants", "chest"]),
+      slot: z.enum(["helmet", "chest", "weapon", "boots", "gloves", "pants"]),
     }),
     z.object({
       type: z.literal("USE_ITEM"),
@@ -79,6 +84,8 @@ export interface Stats {
   defense: number;
   resistance: number;
   range: number;
+  physicalDamage?: number;
+  magicDamage?: number;
   damageType: "physical" | "magic";
   damageMultiplier?: number;
 }
@@ -93,18 +100,25 @@ export interface PlayerView {
   x: number;
   y: number;
   inventory: (string | null)[];
-  equipment: Record<"helmet" | "gloves" | "pants" | "chest", string | null>;
+  potions: (string | null)[];
+  equipment: Record<
+    "helmet" | "chest" | "weapon" | "boots" | "gloves" | "pants",
+    string | null
+  >;
 }
 export interface ItemView {
+  allowedClasses: z.infer<typeof classSchema>[];
   id: string;
   definitionId: string;
   ownerId: string;
   name: string;
-  slot: "helmet" | "gloves" | "pants" | "chest" | null;
+  slot: "helmet" | "chest" | "weapon" | "boots" | "gloves" | "pants" | null;
   defense: number;
   resistance: number;
   heal: number;
   restoreResource: number;
+  physicalDamage?: number;
+  magicDamage?: number;
 }
 export interface EnemyView {
   id: string;
@@ -129,10 +143,24 @@ export interface GameView {
   movementRoll: number | null;
   movementLeft: number;
   actionUsed: boolean;
+  pendingAttack?: {
+    actorId: string;
+    targetId: string;
+    ability: "basic" | "special" | "ultimate";
+    d20: number;
+  } | null;
   players: PlayerView[];
   enemies: EnemyView[];
   items: Record<string, ItemView>;
   chests: { id: string; x: number; y: number; opened: boolean }[];
+  interactables: {
+    id: string;
+    kind: string;
+    name: string;
+    x: number;
+    y: number;
+    used: boolean;
+  }[];
   zones: {
     id: string;
     name: string;
@@ -171,7 +199,14 @@ export interface Receipt {
 
 const nonnegative = z.number().int().nonnegative();
 const pointSchema = z.object({ x: z.number().int(), y: z.number().int() });
-const equipmentSlotSchema = z.enum(["helmet", "gloves", "pants", "chest"]);
+const equipmentSlotSchema = z.enum([
+  "helmet",
+  "chest",
+  "weapon",
+  "boots",
+  "gloves",
+  "pants",
+]);
 const gameStatusSchema = z.enum(["LOBBY", "ACTIVE", "WON", "LOST"]);
 const eventSchema = z.object({
   id: z.string(),
@@ -212,6 +247,15 @@ export const gameViewSchema: z.ZodType<GameView> = z.object({
   movementRoll: z.number().int().min(1).max(6).nullable(),
   movementLeft: nonnegative,
   actionUsed: z.boolean(),
+  pendingAttack: z
+    .object({
+      actorId: z.string(),
+      targetId: z.string(),
+      ability: z.enum(["basic", "special", "ultimate"]),
+      d20: z.number().int().min(1).max(20),
+    })
+    .nullable()
+    .optional(),
   players: z.array(
     pointSchema.extend({
       resource: nonnegative,
@@ -230,13 +274,18 @@ export const gameViewSchema: z.ZodType<GameView> = z.object({
         range: nonnegative,
         damageType: z.enum(["physical", "magic"]),
         damageMultiplier: z.number().optional(),
+        physicalDamage: nonnegative.optional(),
+        magicDamage: nonnegative.optional(),
       }),
       inventory: z.array(z.string().nullable()),
+      potions: z.array(z.string().nullable()).length(4),
       equipment: z.object({
         helmet: z.string().nullable(),
+        chest: z.string().nullable(),
+        weapon: z.string().nullable(),
+        boots: z.string().nullable(),
         gloves: z.string().nullable(),
         pants: z.string().nullable(),
-        chest: z.string().nullable(),
       }),
     }),
   ),
@@ -261,9 +310,20 @@ export const gameViewSchema: z.ZodType<GameView> = z.object({
       resistance: z.number(),
       heal: nonnegative,
       restoreResource: nonnegative,
+      physicalDamage: nonnegative.optional(),
+      magicDamage: nonnegative.optional(),
+      allowedClasses: z.array(classSchema).min(1),
     }),
   ),
   chests: z.array(pointSchema.extend({ id: z.string(), opened: z.boolean() })),
+  interactables: z.array(
+    pointSchema.extend({
+      id: z.string(),
+      kind: z.string(),
+      name: z.string(),
+      used: z.boolean(),
+    }),
+  ),
   zones: z.array(
     pointSchema.extend({
       id: z.string(),

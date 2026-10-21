@@ -15,9 +15,14 @@ export function animationDuration(
   const player = previous.players.find((p) => p.id === playerId);
   if (player && action.type === "ROLL_MOVEMENT") return diceTimings.d6;
   if (player && action.type === "MOVE_STEP") return movementStepMs;
-  if (player && action.type === "ATTACK")
+  if (player && action.type === "ATTACK") return diceTimings.d20 + 1250;
+  if (player && action.type === "ROLL_ATTACK_D6")
     return (
-      animationTimings[player.classId][action.ability ?? "basic"] +
+      diceTimings.d6 +
+      1250 +
+      animationTimings[player.classId][
+        previous.pendingAttack?.ability ?? "basic"
+      ] +
       combatPresentation.totalMs
     );
   const oldIds = new Set(previous.events.map((e) => e.id));

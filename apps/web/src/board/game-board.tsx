@@ -11,6 +11,7 @@ import {
 import type { GameView } from "@umbral/protocol";
 import type { Preferences } from "../ui/shared";
 import { facingOriginX } from "./sprite-facing";
+import treeLayers from "../../../../assets/mapas/generated/trees.json";
 const actorArt = { ...actorRecipes.players, ...actorRecipes.enemies };
 type ActorArtId = keyof typeof actorArt;
 type Clip = {
@@ -23,6 +24,7 @@ type Clip = {
 };
 const TILE = 70,
   OFFSET = 30;
+const ART_VERSION = "passive-20261019";
 class Courtyard extends Phaser.Scene {
   snapshot: GameView;
   preferences: Preferences;
@@ -43,6 +45,11 @@ class Courtyard extends Phaser.Scene {
   finishPresentation() {
     if (this.visualJobs.size === 0 && this.snapshot.animationPending)
       this.onAnimationComplete(this.snapshot.revision);
+  }
+  setActorDepth(actor: Phaser.GameObjects.Container) {
+    actor.setDepth(
+      10 + (actor.y + 25 - OFFSET) / TILE - this.snapshot.map.minY,
+    );
   }
   beginVisual() {
     const done = () => {
@@ -72,7 +79,7 @@ class Courtyard extends Phaser.Scene {
     const { width, height } = camera;
     const centerX = OFFSET + x * TILE + TILE / 2;
     const centerY = OFFSET + y * TILE + TILE / 2;
-    const margin = Math.min(90, width / 4, height / 4);
+    const margin = Math.min(125, width / 4, height / 4);
     const nextX = Phaser.Math.Clamp(
       centerX < camera.scrollX + margin
         ? centerX - margin
@@ -153,7 +160,7 @@ class Courtyard extends Phaser.Scene {
         event.ability === "ultimate" ? 0xffd261 : 0xa7def2,
         0.7,
       )
-      .setDepth(100);
+      .setDepth(100 + this.snapshot.map.height);
     this.tweens.add({
       targets: fx,
       scale: 2.5,
@@ -175,7 +182,7 @@ class Courtyard extends Phaser.Scene {
         },
       )
       .setOrigin(0.5)
-      .setDepth(101);
+      .setDepth(101 + this.snapshot.map.height);
     this.time.delayedCall(combatPresentation.resultMs, () => {
       const current = this.displayedHp.get(entity.id) ?? hp;
       if (current === hp) {
@@ -230,7 +237,6 @@ class Courtyard extends Phaser.Scene {
   }
   idle(actor: Phaser.GameObjects.Container, classId: ActorArtId) {
     if (
-      classId === "mage" ||
       this.preferences.reducedMotion ||
       !this.anims.exists(classId + "-idle")
     ) {
@@ -255,6 +261,8 @@ class Courtyard extends Phaser.Scene {
       this.report("No se pudieron cargar todos los gráficos."),
     );
     this.load.image("courtyard", "/assets/mapas/generated/courtyard.webp");
+    for (const layer of treeLayers)
+      this.load.image("tree-" + layer.id, `/assets/${layer.image}`);
     for (const id of Object.keys(actorArt) as ActorArtId[]) {
       const recipe = actorArt[id];
       if (id in classes)
@@ -263,12 +271,12 @@ class Courtyard extends Phaser.Scene {
         this.load.image(id, `/assets/${recipe.folder}/generated/portrait.png`);
       this.load.json(
         id + "-clips",
-        `/assets/${recipe.folder}/generated/animations.json?v=full-frames-2`,
+        `/assets/${recipe.folder}/generated/animations.json?v=${ART_VERSION}`,
       );
       for (const action of Object.keys(recipe.clips))
         this.load.spritesheet(
           id + "-" + action,
-          `/assets/${recipe.folder}/generated/${action}.png?v=full-frames-2`,
+          `/assets/${recipe.folder}/generated/${action}.png?v=${ART_VERSION}`,
           { frameWidth: 256, frameHeight: 256 },
         );
     }
@@ -297,16 +305,19 @@ class Courtyard extends Phaser.Scene {
           "courtyard",
         )
         .setOrigin(0, 0)
-        .setScale(TILE / 16)
-        .setAlpha(0.85);
-    this.add.rectangle(
-      OFFSET + (this.snapshot.map.minX + this.snapshot.map.width / 2) * TILE,
-      OFFSET + (this.snapshot.map.minY + this.snapshot.map.height / 2) * TILE,
-      this.snapshot.map.width * TILE,
-      this.snapshot.map.height * TILE,
-      0x0c1714,
-      0.16,
-    );
+        .setScale(TILE / 16);
+    for (const layer of treeLayers) {
+      if (!this.textures.exists("tree-" + layer.id)) continue;
+      const image = this.add
+        .image(
+          OFFSET + (layer.left - 494) * (TILE / 16),
+          OFFSET + (layer.top - 366) * (TILE / 16),
+          "tree-" + layer.id,
+        )
+        .setOrigin(0, 0)
+        .setScale(TILE / 16);
+      image.setDepth(10 + (layer.footY - 366) / 16 - this.snapshot.map.minY);
+    }
     this.grid = this.add.graphics();
     this.highlights = this.add.graphics();
     this.decor = this.add.container(0, 0);
@@ -365,9 +376,9 @@ class Courtyard extends Phaser.Scene {
     const highlights = this.highlights!;
     highlights.clear();
     const scenerySignature = JSON.stringify([
-      state.map.walls,
       state.chests,
       state.zones,
+      state.interactables,
     ]);
     if (scenerySignature !== this.scenerySignature) {
       this.scenerySignature = scenerySignature;
@@ -384,25 +395,6 @@ class Courtyard extends Phaser.Scene {
             })
             .setOrigin(0.5),
         );
-      for (const wall of state.map.walls) {
-        const g = this.add.graphics();
-        g.fillStyle(0x253830, 0.96).fillRoundedRect(
-          OFFSET + wall.x * TILE + 4,
-          OFFSET + wall.y * TILE + 4,
-          62,
-          62,
-          5,
-        );
-        g.lineStyle(2, 0x83917c, 0.55).strokeRoundedRect(
-          OFFSET + wall.x * TILE + 4,
-          OFFSET + wall.y * TILE + 4,
-          62,
-          62,
-          5,
-        );
-        this.decor!.add(g);
-        label(wall.x, wall.y, "▰", "#8a9985");
-      }
       for (const chest of state.chests) {
         const x = OFFSET + chest.x * TILE + 35,
           y = OFFSET + chest.y * TILE + 35,
@@ -417,6 +409,20 @@ class Courtyard extends Phaser.Scene {
         g.lineStyle(3, 0xead08a).lineBetween(x - 19, y - 2, x + 19, y - 2);
         g.fillStyle(0x202b20).fillRect(x - 3, y - 4, 6, 10);
         this.decor!.add(g);
+      }
+      for (const object of state.interactables) {
+        if (object.used) continue;
+        const x = OFFSET + object.x * TILE + 35;
+        const y = OFFSET + object.y * TILE + 35;
+        const g = this.add.graphics();
+        g.fillStyle(object.kind === "plant" ? 0x7dbb68 : 0x9ab7b0).fillCircle(
+          x,
+          y,
+          13,
+        );
+        g.lineStyle(2, 0xf3eab8).strokeCircle(x, y, 13);
+        this.decor!.add(g);
+        label(object.x, object.y, object.kind === "plant" ? "✿" : "✦");
       }
       for (const zone of state.zones) {
         const x = OFFSET + zone.x * TILE + 35,
@@ -454,7 +460,8 @@ class Courtyard extends Phaser.Scene {
         !this.seen.has(event.id) &&
         this.initialized &&
         event.actorId &&
-        event.targetId,
+        event.targetId &&
+        ["ATTACK", "ENEMY", "MISS"].includes(event.kind),
     );
     for (const event of freshImpacts) {
       const targetId = event.targetId;
@@ -586,7 +593,9 @@ class Courtyard extends Phaser.Scene {
           x,
           y,
           duration: this.preferences.reducedMotion ? 0 : moveDuration,
+          onUpdate: () => this.setActorDepth(actor!),
           onComplete: () => {
+            this.setActorDepth(actor!);
             done();
             if (player) {
               const sprite = actor!.getByName(
@@ -629,7 +638,7 @@ class Courtyard extends Phaser.Scene {
           ? 0.25
           : 1,
       );
-      actor.setDepth(10 + entity.y);
+      this.setActorDepth(actor);
       const shownHp = this.pendingImpacts.has(entity.id)
         ? (this.displayedHp.get(entity.id) ?? entity.hp)
         : entity.hp;
@@ -654,13 +663,27 @@ class Courtyard extends Phaser.Scene {
     for (const event of state.events) {
       if (this.seen.has(event.id)) continue;
       this.seen.add(event.id);
-      if (this.initialized && event.kind === "DICE") {
+      if (
+        this.initialized &&
+        ["DICE", "ATTACK_D20", "ATTACK_MISS_ROLL", "ATTACK_D6"].includes(
+          event.kind,
+        )
+      ) {
+        const rollDuration =
+          event.kind === "DICE"
+            ? diceTimings.d6
+            : event.kind === "ATTACK_D6"
+              ? diceTimings.d6 + 1250
+              : diceTimings.d20 + 1250;
         if (!this.preferences.reducedMotion) {
           const done = this.beginVisual();
-          this.time.delayedCall(diceTimings.d6, done);
+          this.time.delayedCall(rollDuration, done);
         }
+        if (event.kind === "ATTACK_D6") attackDelay += rollDuration;
         continue;
       }
+      if (["ATTACK_D20", "ATTACK_MISS_ROLL", "ATTACK_D6"].includes(event.kind))
+        continue;
       if (!this.initialized || !event.actorId || !event.targetId) continue;
       const actor = this.actors.get(event.actorId),
         target = this.actors.get(event.targetId);

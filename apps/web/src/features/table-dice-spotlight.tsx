@@ -7,7 +7,7 @@ type GameEvent = GameView["events"][number];
 type Roll = {
   event: GameEvent;
   revision: number;
-  kind: "movement" | "attack";
+  kind: "movement" | "d20" | "d6" | "attack";
   actorName: string;
   actorLabel: string;
   portrait?: string;
@@ -16,9 +16,11 @@ type Roll = {
 
 function isRoll(event: GameEvent) {
   return (
-    event.kind === "DICE" ||
+    ["DICE", "ATTACK_D20", "ATTACK_MISS_ROLL", "ATTACK_D6"].includes(
+      event.kind,
+    ) ||
     (Boolean(event.actorId && event.targetId) &&
-      ["ATTACK", "ENEMY", "MISS"].includes(event.kind))
+      ["ENEMY", "MISS"].includes(event.kind))
   );
 }
 
@@ -28,7 +30,14 @@ function describeRoll(game: GameView, event: GameEvent): Roll {
   const target = [...game.players, ...game.enemies].find(
     (item) => item.id === event.targetId,
   );
-  const kind = event.kind === "DICE" ? "movement" : "attack";
+  const kind =
+    event.kind === "DICE"
+      ? "movement"
+      : event.kind === "ATTACK_D6"
+        ? "d6"
+        : ["ATTACK_D20", "ATTACK_MISS_ROLL"].includes(event.kind)
+          ? "d20"
+          : "attack";
   return {
     event,
     revision: game.revision,
@@ -39,9 +48,11 @@ function describeRoll(game: GameView, event: GameEvent): Roll {
     result:
       kind === "movement"
         ? event.text.split(": ").slice(1).join(": ") || event.text
-        : event.kind === "MISS"
+        : ["MISS", "ATTACK_MISS_ROLL"].includes(event.kind)
           ? "El ataque falló"
-          : `${event.amount ?? 0} de daño a ${target?.name ?? "su objetivo"}`,
+          : kind === "d20"
+            ? "Impactó. Ahora tirá el D6."
+            : `${event.amount ?? 0} de daño a ${target?.name ?? "su objetivo"}`,
   };
 }
 
@@ -62,8 +73,8 @@ function RollCard({
 
   useEffect(() => {
     if (!resolved) return;
-    const leaveTimer = window.setTimeout(() => setLeaving(true), 1700);
-    const finishTimer = window.setTimeout(onFinished, 2050);
+    const leaveTimer = window.setTimeout(() => setLeaving(true), 900);
+    const finishTimer = window.setTimeout(onFinished, 1250);
     return () => {
       window.clearTimeout(leaveTimer);
       window.clearTimeout(finishTimer);
@@ -131,7 +142,7 @@ export function TableDiceSpotlight({
   if (!roll) return null;
   const reveal =
     game.revision > roll.revision ||
-    (roll.kind === "movement" ? !game.animationPending : !resultHidden);
+    (roll.kind === "attack" ? !resultHidden : true);
   return (
     <RollCard
       key={roll.event.id}

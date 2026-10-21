@@ -9,6 +9,7 @@ import {
   effectiveStats,
   assertInventory,
   attackPreview,
+  clearPath,
   type Game,
 } from "./index";
 import { prototype } from "@umbral/content/prototype";
@@ -57,8 +58,8 @@ describe("turnos y movimiento", () => {
     ).toBe(false));
   it("bloquea aliados, paredes, enemigos y límites", () => {
     for (const point of [
-      { x: 3, y: 8 },
-      { x: 4, y: 3 },
+      { x: 12, y: -18 },
+      { x: 2, y: 8 },
       { x: 3, y: 5 },
       { x: 40, y: 8 },
     ]) {
@@ -78,14 +79,16 @@ describe("turnos y movimiento", () => {
   });
   it("consume una casilla y rechaza movimiento agotado", () => {
     let game = roll(setup(), 1);
+    game.players[0].x = 10;
+    game.players[0].y = -18;
     game = resolve(
       game,
       "one",
-      { type: "MOVE_STEP", direction: "UP" },
+      { type: "MOVE_STEP", direction: "LEFT" },
       prototype,
       () => 1,
     );
-    expect(game.players[0].y).toBe(7);
+    expect(game.players[0].x).toBe(9);
     expect(game.movementLeft).toBe(1);
     game = resolve(
       game,
@@ -106,8 +109,8 @@ describe("turnos y movimiento", () => {
   });
   it("permite explorar fuera de la vista inicial y bloquea el vacío del PNG", () => {
     const game = roll(setup());
-    game.players[0].x = 9;
-    game.players[0].y = 8;
+    game.players[0].x = -4;
+    game.players[0].y = -10;
     const explored = resolve(
       game,
       "one",
@@ -115,7 +118,7 @@ describe("turnos y movimiento", () => {
       prototype,
       () => 1,
     );
-    expect(explored.players[0].x).toBe(10);
+    expect(explored.players[0].x).toBe(-3);
     explored.players[0].x = -19;
     explored.players[0].y = 0;
     expect(() =>
@@ -190,15 +193,16 @@ describe("combate e inventario", () => {
     expect(attackPreview(game, game.players[0], game.enemies[0]).valid).toBe(
       false,
     );
-    game.players[1].x = 3;
-    game.players[1].y = 3;
-    game.enemies[0].x = 5;
-    game.enemies[0].y = 3;
+    game.players[1].x = 2;
+    game.players[1].y = 7;
+    game.enemies[0].x = 2;
+    game.enemies[0].y = 9;
     expect(attackPreview(game, game.players[1], game.enemies[0]).valid).toBe(
       false,
     );
+    expect(clearPath(game, { x: 0, y: -14 }, { x: 0, y: -12 })).toBe(false);
   });
-  it("un fallo consume acción y cierra movimiento sin tirar daño", () => {
+  it("un fallo consume acción y cierra movimiento sin tirar D6", () => {
     const game = setup();
     game.players[0].x = 3;
     game.players[0].y = 6;
@@ -213,42 +217,99 @@ describe("combate e inventario", () => {
         return 100;
       },
     );
-    expect(calls).toEqual([100]);
+    expect(calls).toEqual([100, 20]);
+    expect(next.events.at(-1)?.kind).toBe("ATTACK_MISS_ROLL");
+    expect(next.pendingAttack).toBeNull();
     expect(next.actionUsed).toBe(true);
     expect(() =>
       resolve(
         next,
         "one",
-        { type: "EQUIP", itemId: "one:travel-pants" },
+        { type: "EQUIP", itemId: "one:travel-boots" },
         prototype,
         () => 1,
       ),
     ).toThrow("Ya usaste");
     expect(() => roll(next)).toThrow();
   });
+  it("guarda el D20, exige D6 y aplica el daño una sola vez", () => {
+    const game = setup();
+    game.players[0].x = 3;
+    game.players[0].y = 6;
+    const beforeHp = game.enemies[0].hp;
+    const rolled = resolve(
+      game,
+      "one",
+      { type: "ATTACK", targetId: game.enemies[0].id },
+      prototype,
+      (sides) => (sides === 100 ? 1 : 12),
+    );
+    expect(rolled.pendingAttack?.d20).toBe(12);
+    expect(rolled.enemies[0].hp).toBe(beforeHp);
+    expect(() =>
+      resolve(rolled, "one", { type: "END_TURN" }, prototype, () => 1),
+    ).toThrow("D6");
+    const resolved = resolve(
+      rolled,
+      "one",
+      { type: "ROLL_ATTACK_D6" },
+      prototype,
+      () => 4,
+    );
+    expect(resolved.pendingAttack).toBeNull();
+    expect(resolved.events.slice(-2).map((event) => event.kind)).toEqual([
+      "ATTACK_D6",
+      "ATTACK",
+    ]);
+    expect(resolved.enemies[0].hp).toBe(
+      beforeHp - (resolved.events.at(-1)?.amount ?? 0),
+    );
+    expect(() =>
+      resolve(resolved, "one", { type: "ROLL_ATTACK_D6" }, prototype, () => 6),
+    ).toThrow("No hay un ataque");
+    expect(game.enemies[0].hp).toBe(beforeHp);
+  });
   it("equipa en ranura propia sin cambiar clase, base o identidad", () => {
     const game = setup(),
       next = resolve(
         game,
         "one",
-        { type: "EQUIP", itemId: "one:travel-pants" },
+        { type: "EQUIP", itemId: "one:travel-boots" },
         prototype,
         () => 1,
       );
     expect(next.players[0].inventory).toHaveLength(4);
     expect(Object.keys(next.players[0].equipment)).toEqual([
       "helmet",
+      "chest",
+      "weapon",
+      "boots",
       "gloves",
       "pants",
-      "chest",
     ]);
-    expect(next.players[0].equipment.pants).toBe("one:travel-pants");
+    expect(next.players[0].equipment.boots).toBe("one:travel-boots");
     expect(next.players[0].classId).toBe("paladin");
     expect(next.players[0].stats).toEqual(game.players[0].stats);
     expect(effectiveStats(next, next.players[0]).defense).toBe(
       game.players[0].stats.defense + 1,
     );
-    assertInventory(next);
+    assertInventory(next, prototype);
+  });
+  it("equipa el escudo del paladín y aplica su bono de daño físico", () => {
+    const game = setup(),
+      next = resolve(
+        game,
+        "one",
+        { type: "EQUIP", itemId: "one:paladin-shield" },
+        prototype,
+        () => 1,
+      );
+    expect(next.players[0].equipment.weapon).toBe("one:paladin-shield");
+    expect(effectiveStats(next, next.players[0]).physicalDamage).toBe(
+      (game.players[0].stats.physicalDamage ?? 0) + 2,
+    );
+    expect(game.players[0].equipment.weapon).toBeNull();
+    assertInventory(next, prototype);
   });
   it("rechaza equipo ajeno y objetos duplicados", () => {
     const game = setup();
@@ -256,19 +317,19 @@ describe("combate e inventario", () => {
       resolve(
         game,
         "one",
-        { type: "EQUIP", itemId: "two:travel-pants" },
+        { type: "EQUIP", itemId: "two:travel-boots" },
         prototype,
         () => 1,
       ),
     ).toThrow("No podés");
     game.players[0].inventory[3] = game.players[0].inventory[0];
-    expect(() => assertInventory(game)).toThrow();
+    expect(() => assertInventory(game, prototype)).toThrow();
   });
   it("no desequipa con la bolsa llena", () => {
     const game = resolve(
       setup(),
       "one",
-      { type: "EQUIP", itemId: "one:travel-pants" },
+      { type: "EQUIP", itemId: "one:travel-boots" },
       prototype,
       () => 1,
     );
@@ -276,14 +337,14 @@ describe("combate e inventario", () => {
     for (let i = 0; i < 4; i++)
       if (game.players[0].inventory[i] === null) {
         const id = "extra" + i;
-        game.items[id] = { ...game.items["one:potion"], id };
+        game.items[id] = { ...game.items["one:travel-boots"], id };
         game.players[0].inventory[i] = id;
       }
     expect(() =>
       resolve(
         game,
         "one",
-        { type: "UNEQUIP", slot: "pants" },
+        { type: "UNEQUIP", slot: "boots" },
         prototype,
         () => 1,
       ),
@@ -291,23 +352,110 @@ describe("combate e inventario", () => {
   });
   it("abre cada cofre una vez al limpiar y conserva identificadores", () => {
     const game = setup();
-    game.enemies[1].hp = 0;
-    game.enemies[2].hp = 0;
+    for (const enemy of game.enemies.slice(1)) enemy.hp = 0;
     game.enemies[0].hp = 1;
     game.players[0].x = 3;
     game.players[0].y = 6;
-    const next = resolve(
+    const rolled = resolve(
       game,
       "one",
       { type: "ATTACK", targetId: game.enemies[0].id },
       prototype,
       (s) => (s === 100 ? 1 : s),
     );
+    const next = resolve(
+      rolled,
+      "one",
+      { type: "ROLL_ATTACK_D6" },
+      prototype,
+      () => 1,
+    );
     expect(next.chests.every((c) => c.opened)).toBe(true);
     expect(
       Object.values(next.items).filter((i) => i.id.endsWith(":loot")),
-    ).toHaveLength(4);
-    assertInventory(next);
+    ).toHaveLength(game.chests.length);
+    assertInventory(next, prototype);
+  });
+  it("recolecta una planta una sola vez y conserva el objeto obtenido", () => {
+    const game = setup();
+    expect(() =>
+      resolve(
+        game,
+        "one",
+        { type: "INTERACT", targetId: "object-1" },
+        prototype,
+        () => 1,
+      ),
+    ).toThrow("Acercate");
+    game.players[0].x = -7;
+    game.players[0].y = -3;
+    game.players[0].potions[0] = null;
+    delete game.items["one:potion"];
+    const next = resolve(
+      game,
+      "one",
+      { type: "INTERACT", targetId: "object-1" },
+      prototype,
+      () => 1,
+    );
+    const id = `${game.id}:object-1:gather`;
+    expect(next.interactables[0].used).toBe(true);
+    expect(next.players[0].potions).toContain(id);
+    expect(next.items[id]).toMatchObject({
+      ownerId: "one",
+      definitionId: "potion",
+    });
+    expect(next.actionUsed).toBe(true);
+    expect(game.interactables[0].used).toBe(false);
+    next.actionUsed = false;
+    expect(() =>
+      resolve(
+        next,
+        "one",
+        { type: "INTERACT", targetId: "object-1" },
+        prototype,
+        () => 1,
+      ),
+    ).toThrow("Ya se recogió");
+  });
+  it("no consume una planta cuando las casillas de pociones están llenas", () => {
+    const game = setup();
+    game.players[0].x = -7;
+    game.players[0].y = -3;
+    for (let i = 1; i < 4; i++) {
+      const id = `extra-potion-${i}`;
+      game.items[id] = { ...game.items["one:potion"], id };
+      game.players[0].potions[i] = id;
+    }
+    expect(() =>
+      resolve(
+        game,
+        "one",
+        { type: "INTERACT", targetId: "object-1" },
+        prototype,
+        () => 1,
+      ),
+    ).toThrow("No hay espacio");
+    expect(game.interactables[0].used).toBe(false);
+    expect(game.actionUsed).toBe(false);
+  });
+  it("recolecta una poción aunque la bolsa de equipo esté llena", () => {
+    const game = setup();
+    const player = game.players[0];
+    player.x = -7;
+    player.y = -3;
+    game.items.extra = { ...game.items["one:travel-boots"], id: "extra" };
+    player.inventory[3] = "extra";
+    const next = resolve(
+      game,
+      "one",
+      { type: "INTERACT", targetId: "object-1" },
+      prototype,
+      () => 1,
+    );
+    expect(next.players[0].inventory).toEqual(player.inventory);
+    expect(next.players[0].potions[1]).toBe(`${game.id}:object-1:gather`);
+    assertInventory(next, prototype);
   });
   it("resuelve enemigos después del último jugador y reinicia la ronda", () => {
     let game = setup();
@@ -374,7 +522,7 @@ describe("recursos de clase de demo", () => {
   it("poción restaura un tercio y se consume una sola vez", () => {
     const g = setup();
     g.players[0].resource = 250;
-    const id = g.players[0].inventory[0]!;
+    const id = g.players[0].potions[0]!;
     const next = resolve(
       g,
       "one",
@@ -383,7 +531,7 @@ describe("recursos de clase de demo", () => {
       () => 1,
     );
     expect(next.players[0].resource).toBe(300);
-    expect(next.players[0].inventory).not.toContain(id);
+    expect(next.players[0].potions).not.toContain(id);
     expect(() =>
       resolve(
         next,

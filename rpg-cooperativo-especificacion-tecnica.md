@@ -174,6 +174,8 @@ Ejemplo conceptual de un movimiento:
 | Comando propuesto | Validación principal |
 | --- | --- |
 | `ROLL_MOVEMENT` | Turno, fase y ausencia de una tirada previa. |
+| `ATTACK` (demo actual) | Objetivo, habilidad, alcance, trayectoria, recurso y acción. Confirma impacto y D20; si acierta, deja `pendingAttack`. |
+| `ROLL_ATTACK_D6` (demo actual) | Solo el actor del ataque pendiente, tras confirmación de la tirada anterior. Calcula daño y lo confirma una vez. |
 | `MOVE_STEP` | Dirección cardinal, casilla libre, obstáculos y movimiento restante. |
 | `FINISH_MOVEMENT` | Cierre irreversible de movimiento para ese turno. |
 | `BASIC_ATTACK` | Acción disponible, objetivo, alcance y trayectoria. |

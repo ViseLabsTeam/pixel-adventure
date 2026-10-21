@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Editor local del mapa · Umbral</title>
+    <style>
+      body {
+        margin: 0;
+        background: #14211d;
+        color: #f2e7cf;
+        font: 15px system-ui;
+      }
+      header {
+        padding: 12px 18px;
+        background: #23352e;
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      label {
+        display: inline-flex;
+        gap: 5px;
+        align-items: center;
+      }
+      input[type="number"] {
+        width: 58px;
+      }
+      button,
+      select,
+      input {
+        font: inherit;
+      }
+      button {
+        cursor: pointer;
+      }
+      #viewport {
+        overflow: auto;
+        height: calc(100vh - 175px);
+      }
+      #placement-panel {
+        padding: 7px 18px;
+        background: #1b2b24;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      #placement-panel input {
+        width: 125px;
+      }
+      canvas {
+        display: block;
+        image-rendering: pixelated;
+        cursor: crosshair;
+        margin: 16px;
+        touch-action: none;
+      }
+      footer {
+        padding: 8px 18px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <label>PNG <input id="png" type="file" accept="image/png" /></label>
+      <label
+        >JSON <input id="json" type="file" accept="application/json,.json"
+      /></label>
+      <label>Origen X <input id="origin-x" type="number" value="494" /></label>
+      <label>Y <input id="origin-y" type="number" value="366" /></label>
+      <label
+        >Casilla <input id="tile" type="number" min="1" value="16"
+      /></label>
+      <label
+        >Zoom <input id="zoom" type="range" min="1" max="5" value="2"
+      /></label>
+      <select id="tool">
+        <option value="wall">Pintar muro</option>
+        <option value="trunk">Pintar tronco</option>
+        <option value="erase">Borrar casilla</option>
+        <option value="outline">Delinear árbol</option>
+        <option value="preview">Vista de personaje</option>
+        <option value="spawn">Ubicar aparición</option>
+        <option value="chest">Ubicar cofre</option>
+        <option value="interactable">Ubicar interactuable</option>
+        <option value="enemy">Ubicar / arrastrar enemigo</option>
+        <option value="move">Mover punto seleccionado</option>
+      </select>
+      <label
+        >Jugador
+        <select id="spawn-slot">
+          <option value="0">1</option>
+          <option value="1">2</option>
+          <option value="2">3</option>
+          <option value="3">4</option>
+        </select></label
+      >
+      <select id="tree"></select>
+      <label
+        >Enemigo a agregar
+        <select id="enemy-type"></select
+      ></label>
+      <label
+        >Enemigos del mapa
+        <select id="enemy-list">
+          <option value="">Seleccionar…</option>
+        </select></label
+      >
+      <label>Pie Y <input id="foot-y" type="number" /></label>
+      <button id="new-tree">Nuevo árbol</button>
+      <button id="new-map">Nuevo mapa</button>
+      <button id="reset-outline">Reiniciar silueta</button>
+      <button id="finish">Cerrar silueta</button>
+      <button id="export">Exportar JSON</button>
+    </header>
+    <section id="placement-panel">
+      <strong id="selection">Objeto: ninguno</strong>
+      <label>ID <input id="entity-id" /></label>
+      <label>X <input id="entity-x" type="number" step="1" /></label>
+      <label>Y <input id="entity-y" type="number" step="1" /></label>
+      <label
+        >Enemigo
+        <select id="entity-archetype"></select
+      ></label>
+      <label
+        >Tipo <input id="entity-kind" list="kinds" /><datalist id="kinds">
+          <option value="plant"></option>
+          <option value="altar"></option>
+          <option value="prop"></option></datalist
+      ></label>
+      <label>Nombre <input id="entity-name" /></label>
+      <label
+        >Objeto <input id="entity-item" list="items" /><datalist id="items">
+          <option value="potion"></option>
+          <option value="iron-helmet"></option>
+          <option value="cloth-gloves"></option>
+          <option value="travel-pants"></option>
+          <option value="old-chestplate"></option>
+          <option value="travel-boots"></option>
+          <option value="paladin-shield"></option>
+          <option value="warrior-sword"></option>
+          <option value="mage-staff"></option>
+          <option value="archer-bow"></option></datalist
+      ></label>
+      <button id="delete-placement">Eliminar punto</button>
+    </section>
+    <div id="viewport"><canvas id="map"></canvas></div>
+    <footer id="status">
+      Arrastrá para pintar casillas; hacé clic para ubicar apariciones, cofres y
+      objetos y enemigos. Arrastrá un enemigo para moverlo o editá sus
+      coordenadas.
+    </footer>
+    <script type="module" src="/map-editor.js"></script>
+  </body>
+</html>

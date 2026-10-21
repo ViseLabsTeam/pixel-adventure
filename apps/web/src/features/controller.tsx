@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import {
   ArrowUp,
   ArrowDown,
@@ -12,7 +12,11 @@ import {
   Shirt,
   Footprints,
   FlaskConical,
-  ChevronRight,
+  Crosshair,
+  Wind,
+  WandSparkles,
+  MoveHorizontal,
+  Eye,
 } from "lucide-react";
 import { classes, equipmentSlots, abilities } from "@umbral/content";
 import type { Session, GameView } from "@umbral/protocol";
@@ -21,6 +25,8 @@ import { ResourceBar } from "../ui/resource-bar";
 import { Health } from "../ui/shared";
 import { useImpactPresentation } from "../ui/use-impact-presentation";
 import { DiceRoll } from "../ui/dice-roll";
+import { InventoryDialog, type InventorySelection } from "./inventory-dialog";
+import { perceivedEnemies, perceptionRange } from "./perceived-enemies";
 import type { Preferences } from "../ui/shared";
 export function Controller({
   connection,
@@ -33,23 +39,46 @@ export function Controller({
 }) {
   const { game, connected, pending, command, select } = connection;
   const [target, setTarget] = useState("");
+  const [selectedAbility, setSelectedAbility] = useState<
+    "basic" | "special" | "ultimate"
+  >("basic");
   const [view, setView] = useState<"character" | "inventory">("character");
+  const [inventorySelection, setInventorySelection] =
+    useState<InventorySelection | null>(null);
+  useEffect(() => {
+    setInventorySelection(null);
+  }, [game?.revision, game?.activePlayerId]);
   const { prior, resultHidden, attackInFlight } = useImpactPresentation(game);
   const newRoll =
-    game?.animationPending && prior
+    game && (game.animationPending || game.animationUntil > game.serverNow)
       ? [...game.events]
           .reverse()
           .find(
             (event) =>
-              !prior.events.some((old) => old.id === event.id) &&
-              ((event.kind === "DICE" &&
-                game.activePlayerId === session.playerId) ||
-                (event.actorId === session.playerId && !!event.targetId)),
+              event.id.startsWith(`${game.id}:${game.revision}:`) &&
+              event.actorId === session.playerId &&
+              ["DICE", "ATTACK_D20", "ATTACK_MISS_ROLL", "ATTACK_D6"].includes(
+                event.kind,
+              ),
           )
       : undefined;
   const [recentRoll, setRecentRoll] = useState<
     GameView["events"][number] | null
   >(null);
+  const [resolvedRollId, setResolvedRollId] = useState<string | null>(null);
+  const [dismissedRollId, setDismissedRollId] = useState<string | null>(null);
+  useEffect(
+    () => setSelectedAbility("basic"),
+    [game?.activePlayerId, game?.round],
+  );
+  useEffect(() => {
+    if (!resolvedRollId) return;
+    const timer = window.setTimeout(
+      () => setDismissedRollId(resolvedRollId),
+      1250,
+    );
+    return () => window.clearTimeout(timer);
+  }, [resolvedRollId]);
   useEffect(() => {
     if (!game || game.activePlayerId !== session.playerId) {
       setRecentRoll(null);
@@ -57,14 +86,31 @@ export function Controller({
       setRecentRoll(newRoll);
     }
   }, [game?.activePlayerId, newRoll?.id, session.playerId]);
+  const actor = game?.players.find((player) => player.id === session.playerId);
+  const enemiesInRange =
+    actor && game ? perceivedEnemies(actor, game.enemies) : [];
+  const enemyIdsInRange = enemiesInRange.map((enemy) => enemy.id);
   useEffect(() => {
-    if (attackInFlight) return;
-    if (game && !game.enemies.some((e) => e.id === target && e.hp > 0)) {
-      const next = game.enemies.find((e) => e.hp > 0)?.id ?? "";
-      setTarget(next);
-      if (next) select(next);
-    }
-  }, [game?.enemies.map((e) => `${e.id}:${e.hp}`).join(), attackInFlight]);
+    if (!game || !actor || attackInFlight || game.pendingAttack) return;
+    const next = enemyIdsInRange.includes(target)
+      ? target
+      : (enemyIdsInRange[0] ?? "");
+    if (next !== target) setTarget(next);
+    if (
+      game.activePlayerId === actor.id &&
+      game.selectedTarget !== (next || null)
+    )
+      select(next || null);
+  }, [
+    game?.revision,
+    game?.activePlayerId,
+    game?.selectedTarget,
+    actor?.x,
+    actor?.y,
+    enemyIdsInRange.join("|"),
+    attackInFlight,
+    game?.pendingAttack?.targetId,
+  ]);
   if (!game) return null;
   const player = game.players.find((p) => p.id === session.playerId);
   if (!player) return <p>No encontramos tu personaje.</p>;
@@ -90,13 +136,19 @@ export function Controller({
     !game.storageError;
   const canMove = enabled && game.phase === "MOVEMENT" && game.movementLeft > 0,
     canAct = enabled && !game.actionUsed;
+  const selectedItem = inventorySelection
+    ? game.items[inventorySelection.itemId]
+    : undefined;
+  const replacedId = selectedItem?.slot
+    ? player.equipment[selectedItem.slot]
+    : null;
   const shownRoll =
     newRoll ?? (game.activePlayerId === player.id ? recentRoll : null);
   const movementRolling = newRoll?.kind === "DICE";
   const visibleEvents =
     (movementRolling || resultHidden) && prior ? prior.events : game.events;
   const lastDice = [...visibleEvents].reverse().find((e) => e.dice)?.dice;
-  const shownEnemies = game.enemies.map((enemy) => ({
+  const shownEnemies = enemiesInRange.map((enemy) => ({
     ...enemy,
     hp:
       attackInFlight && prior
@@ -109,19 +161,56 @@ export function Controller({
       name: chest.opened ? "Cofre abierto" : "Cofre sellado",
     })),
     ...game.zones,
+    ...game.interactables.filter((object) => !object.used),
   ].filter(
     (object) =>
       Math.abs(player.x - object.x) + Math.abs(player.y - object.y) <= 1,
   );
-  const itemIcon = (item: GameView["items"][string] | undefined) =>
+  const classInfo = classes[player.classId];
+  const stats = [
+    { label: "Precisión", value: player.stats.accuracy, Icon: Crosshair },
+    { label: "Esquive", value: player.stats.dodge, Icon: Eye },
+    { label: "Agilidad", value: player.stats.agility, Icon: Wind },
+    { label: "Defensa física", value: player.stats.defense, Icon: Shield },
+    {
+      label: "Resistencia mágica",
+      value: player.stats.resistance,
+      Icon: Sparkles,
+    },
+    { label: "Alcance", value: player.stats.range, Icon: MoveHorizontal },
+    {
+      label: "Daño físico",
+      value: player.stats.physicalDamage ?? classInfo.demoDamage.physical,
+      Icon: Swords,
+    },
+    {
+      label: "Daño mágico",
+      value: player.stats.magicDamage ?? classInfo.demoDamage.magic,
+      Icon: WandSparkles,
+    },
+  ];
+  const itemIcon = (
+    item: GameView["items"][string] | undefined,
+    slot = item?.slot,
+  ) =>
     item?.heal ? (
       <FlaskConical />
-    ) : item?.slot === "gloves" ? (
+    ) : slot === "gloves" ? (
       <Hand />
-    ) : item?.slot === "pants" ? (
+    ) : slot === "pants" || slot === "boots" ? (
       <Footprints />
-    ) : item?.slot === "chest" ? (
+    ) : slot === "chest" ? (
       <Shirt />
+    ) : slot === "weapon" ? (
+      player.classId === "mage" ? (
+        <WandSparkles />
+      ) : player.classId === "archer" ? (
+        <Crosshair />
+      ) : player.classId === "paladin" ? (
+        <Shield />
+      ) : (
+        <Swords />
+      )
     ) : (
       <Shield />
     );
@@ -186,16 +275,26 @@ export function Controller({
           </div>
           <span className="pill">#{player.slot + 1}</span>
         </div>
-        {shownRoll && (
-          <DiceRoll
-            key={shownRoll.id}
-            event={shownRoll}
-            kind={shownRoll.kind === "DICE" ? "movement" : "attack"}
-            reveal={
-              shownRoll.kind === "DICE" ? !connection.animating : !resultHidden
-            }
-            reducedMotion={preferences.reducedMotion}
-          />
+        {shownRoll && shownRoll.id !== dismissedRollId && (
+          <div
+            className="character-dice-overlay"
+            data-testid="character-dice-overlay"
+          >
+            <DiceRoll
+              key={shownRoll.id}
+              event={shownRoll}
+              kind={
+                shownRoll.kind === "DICE"
+                  ? "movement"
+                  : shownRoll.kind === "ATTACK_D6"
+                    ? "d6"
+                    : "d20"
+              }
+              reveal
+              reducedMotion={preferences.reducedMotion}
+              onResolved={() => setResolvedRollId(shownRoll.id)}
+            />
+          </div>
         )}
         <section className={`character-card ${player.classId}`}>
           <div className="character-copy">
@@ -205,28 +304,34 @@ export function Controller({
             <h1>{player.name}</h1>
             <p>{classes[player.classId].title}</p>
             <Health hp={shownHp} max={player.stats.maxHp} label />
+            <div className="stat-grid" aria-label="Estadísticas del personaje">
+              {stats.map(({ label, value, Icon }) => (
+                <div
+                  className="stat-entry"
+                  key={label}
+                  title={`${label}: ${value} de 10`}
+                >
+                  <Icon size={13} aria-hidden="true" />
+                  <span>{label}</span>
+                  <b>{value}</b>
+                  <i
+                    className="stat-meter"
+                    style={
+                      {
+                        "--stat-fill": `${Math.min(value, 10) * 10}%`,
+                      } as CSSProperties
+                    }
+                  />
+                </div>
+              ))}
+            </div>
           </div>
           <img
-            src={classes[player.classId].portrait}
+            src={classInfo.idlePortrait}
             alt={classes[player.classId].name}
           />
+          <ResourceBar classId={player.classId} value={player.resource} />
         </section>
-        <ResourceBar classId={player.classId} value={player.resource} />
-        <div className="stat-grid">
-          {[
-            ["Precisión", player.stats.accuracy],
-            ["Esquive", player.stats.dodge],
-            ["Agilidad", player.stats.agility],
-            ["Defensa", player.stats.defense],
-            ["Res. mágica", player.stats.resistance],
-            ["Alcance", player.stats.range],
-          ].map(([label, value]) => (
-            <div key={label}>
-              <b>{value}</b>
-              <span>{label}</span>
-            </div>
-          ))}
-        </div>
         <div className="control-columns">
           <section className="panel movement-panel">
             <div className="panel-heading">
@@ -235,6 +340,7 @@ export function Controller({
             </div>
             <button
               className="dice-button"
+              aria-label="Tirar movimiento D6"
               disabled={
                 !enabled ||
                 game.phase !== "MOVEMENT" ||
@@ -247,14 +353,11 @@ export function Controller({
                 src="/assets/dados/generated/d6.png"
                 alt=""
               />
-              <div>
-                <b>
-                  {game.movementRoll === null || movementRolling
-                    ? "Tirar movimiento"
-                    : `d6 · ${game.movementRoll}`}
-                </b>
-                <small>2 casillas + bonificación del dado</small>
-              </div>
+              <span className="die-button-label">
+                {game.movementRoll === null || movementRolling
+                  ? "Tirar D6"
+                  : `D6: ${game.movementRoll}`}
+              </span>
             </button>
             <div className="dpad">
               <button
@@ -297,13 +400,6 @@ export function Controller({
                 <ArrowDown />
               </button>
             </div>
-            <button
-              className="text-link"
-              disabled={!enabled || game.phase !== "MOVEMENT"}
-              onClick={() => command({ type: "FINISH_MOVEMENT" })}
-            >
-              Terminar movimiento <ChevronRight size={15} />
-            </button>
           </section>
           <section className="panel attack-panel">
             <div className="panel-heading">
@@ -322,64 +418,56 @@ export function Controller({
             </div>
             <label className="field-label">Elegí un objetivo</label>
             <div className="target-list">
-              {shownEnemies
-                .filter((e) => e.hp > 0)
-                .map((enemy) => (
-                  <button
-                    key={enemy.id}
-                    aria-pressed={target === enemy.id}
-                    className={target === enemy.id ? "selected" : ""}
-                    onClick={() => {
-                      setTarget(enemy.id);
-                      select(enemy.id);
-                    }}
-                  >
-                    <span>
-                      {enemy.name}
-                      <small>
-                        {enemy.hp}/{enemy.maxHp} vida
-                      </small>
-                    </span>
-                    <b>
-                      {game.targets[enemy.id]?.valid
-                        ? `${game.targets[enemy.id].chance}%`
-                        : "Lejos"}
-                    </b>
-                  </button>
-                ))}
-              {!shownEnemies.some((e) => e.hp > 0) && (
-                <p className="muted">El patio está despejado.</p>
+              {shownEnemies.map((enemy) => (
+                <button
+                  key={enemy.id}
+                  disabled={!!game.pendingAttack}
+                  aria-pressed={target === enemy.id}
+                  className={target === enemy.id ? "selected" : ""}
+                  onClick={() => {
+                    if (game.pendingAttack) return;
+                    setTarget(enemy.id);
+                    select(enemy.id);
+                  }}
+                >
+                  <span>
+                    {enemy.name}
+                    <small>
+                      {enemy.hp}/{enemy.maxHp} vida
+                    </small>
+                  </span>
+                  <b>
+                    {game.targets[enemy.id]?.valid
+                      ? `${game.targets[enemy.id].chance}%`
+                      : "Lejos"}
+                  </b>
+                </button>
+              ))}
+              {shownEnemies.length === 0 && (
+                <p className="muted">
+                  {game.enemies.some((enemy) => enemy.hp > 0)
+                    ? `No percibís enemigos a ${perceptionRange} casillas.`
+                    : "El patio está despejado."}
+                </p>
               )}
             </div>
-            <button
-              className="button gold full attack-roll"
-              disabled={!canAct || !target || !game.targets[target]?.valid}
-              onClick={() => command({ type: "ATTACK", targetId: target })}
-            >
-              <img
-                className="die-button-icon"
-                src="/assets/dados/generated/d20.png"
-                alt=""
-              />
-              <img
-                className="die-button-icon"
-                src="/assets/dados/generated/d6.png"
-                alt=""
-              />
-              Tirar ataque
-            </button>
             <div className="special-actions">
               {(["special", "ultimate"] as const).map((ability) => (
                 <button
                   key={ability}
-                  className="button ability-button"
+                  className={`button ability-button ${selectedAbility === ability ? "selected" : ""}`}
+                  aria-pressed={selectedAbility === ability}
                   disabled={
                     !canAct ||
+                    !!game.pendingAttack ||
+                    !enemyIdsInRange.includes(target) ||
                     !game.targets[target]?.valid ||
                     player.resource < (ability === "special" ? 100 : 300)
                   }
                   onClick={() =>
-                    command({ type: "ATTACK", targetId: target, ability })
+                    setSelectedAbility(
+                      selectedAbility === ability ? "basic" : ability,
+                    )
                   }
                 >
                   <Sparkles size={16} />
@@ -393,6 +481,47 @@ export function Controller({
                   </span>
                 </button>
               ))}
+            </div>
+            <div className="attack-dice-pair" aria-label="Dados de ataque">
+              <button
+                className="die-button attack-die"
+                aria-label={`Tirar D20 para ${selectedAbility === "basic" ? "ataque básico" : selectedAbility === "special" ? "especial" : "ulti"}`}
+                disabled={
+                  !canAct ||
+                  !!game.pendingAttack ||
+                  !enemyIdsInRange.includes(target) ||
+                  !game.targets[target]?.valid ||
+                  player.resource <
+                    (selectedAbility === "special"
+                      ? 100
+                      : selectedAbility === "ultimate"
+                        ? 300
+                        : 0)
+                }
+                onClick={() =>
+                  command({
+                    type: "ATTACK",
+                    targetId: target,
+                    ability: selectedAbility,
+                  })
+                }
+              >
+                <img src="/assets/dados/generated/d20.png" alt="" />
+                <span>D20 · ataque</span>
+              </button>
+              <button
+                className="die-button attack-die"
+                aria-label="Tirar D6 para calcular el daño"
+                disabled={
+                  !enabled ||
+                  !game.pendingAttack ||
+                  game.pendingAttack.actorId !== player.id
+                }
+                onClick={() => command({ type: "ROLL_ATTACK_D6" })}
+              >
+                <img src="/assets/dados/generated/d6.png" alt="" />
+                <span>D6 · daño</span>
+              </button>
             </div>
             {nearby.length > 0 && active && !game.actionUsed && (
               <div
@@ -415,6 +544,41 @@ export function Controller({
             )}
           </section>
         </div>
+        <section className="panel potion-panel" aria-label="Pociones">
+          <div className="panel-heading">
+            <h2>Pociones</h2>
+            <span>{player.potions.filter(Boolean).length} / 4</span>
+          </div>
+          <div className="quick-items" aria-label="Consumibles rápidos">
+            {player.potions.map((id, index) => {
+              const item = id ? game.items[id] : undefined;
+              const usable =
+                !!item && (item.heal > 0 || item.restoreResource > 0);
+              return (
+                <button
+                  key={index}
+                  disabled={!canAct || !usable}
+                  onClick={() =>
+                    item &&
+                    setInventorySelection({
+                      origin: "potion",
+                      itemId: item.id,
+                      revision: game.revision,
+                    })
+                  }
+                  title={
+                    usable
+                      ? `Usar ${item.name}`
+                      : `Espacio ${index + 1} sin consumible`
+                  }
+                >
+                  <FlaskConical size={15} aria-hidden="true" />
+                  <span>{usable ? item.name : `Poción ${index + 1}`}</span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
       </div>
       <div
         id="panel-inventory"
@@ -437,27 +601,29 @@ export function Controller({
                 <button
                   key={index}
                   className={`bag-slot ${item ? "filled" : ""}`}
-                  title={item?.name ?? "Espacio vacío"}
-                  disabled={!canAct || !item}
+                  title={
+                    item
+                      ? `${item.name} · ${item.allowedClasses.map((id) => classes[id].name).join(", ")}`
+                      : "Espacio vacío"
+                  }
+                  disabled={
+                    !canAct ||
+                    !item ||
+                    !item.allowedClasses.includes(player.classId)
+                  }
                   onClick={() =>
                     item &&
-                    command(
-                      item.heal || item.restoreResource
-                        ? { type: "USE_ITEM", itemId: item.id }
-                        : { type: "EQUIP", itemId: item.id },
-                    )
+                    setInventorySelection({
+                      origin: "bag",
+                      itemId: item.id,
+                      revision: game.revision,
+                    })
                   }
                 >
                   <span className="bag-index">0{index + 1}</span>
                   {item ? itemIcon(item) : <PlusMark />}
                   <span>{item?.name ?? "Vacío"}</span>
-                  {item && (
-                    <small>
-                      {item.heal
-                        ? `Usar · +${item.heal} vida y +1/3 de barra`
-                        : "Equipar"}
-                    </small>
-                  )}
+                  {item && <small>Ver acciones</small>}
                 </button>
               );
             })}
@@ -466,36 +632,82 @@ export function Controller({
             <h3>Equipo</h3>
             <span>SOLO MODIFICA ESTADÍSTICAS</span>
           </div>
-          <div className="equipment-grid">
-            {Object.entries(equipmentSlots).map(([slot, label]) => {
-              const id = player.equipment[slot as keyof typeof equipmentSlots],
-                item = id ? game.items[id] : undefined;
-              return (
-                <button
-                  className={`equipment-slot ${item ? "filled" : ""}`}
-                  key={slot}
-                  disabled={!canAct || !item}
-                  onClick={() =>
-                    command({
-                      type: "UNEQUIP",
-                      slot: slot as keyof typeof equipmentSlots,
-                    })
-                  }
-                >
-                  <span>{label}</span>
-                  {itemIcon(item)}
-                  <b>{item?.name ?? "Sin equipar"}</b>
-                  {item && (
-                    <small>
-                      +{item.defense} DEF · +{item.resistance} RES
-                    </small>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-          <div className="inventory-portrait" aria-hidden="true">
-            <img src={classes[player.classId].portrait} alt="" />
+          <div className="equipment-stage">
+            <div className="inventory-portrait" aria-hidden="true">
+              <img src={classInfo.idlePortrait} alt="" />
+            </div>
+            <div className="equipment-column">
+              <div className="equipment-grid">
+                {Object.entries(equipmentSlots).map(([slot, label]) => {
+                  const id =
+                      player.equipment[slot as keyof typeof equipmentSlots],
+                    item = id ? game.items[id] : undefined;
+                  return (
+                    <button
+                      className={`equipment-slot equipment-slot-${slot} ${item ? "filled" : ""}`}
+                      key={slot}
+                      disabled={!canAct || !item}
+                      onClick={() =>
+                        item &&
+                        setInventorySelection({
+                          origin: "equipment",
+                          slot: slot as keyof typeof equipmentSlots,
+                          itemId: item.id,
+                          revision: game.revision,
+                        })
+                      }
+                    >
+                      <span>
+                        {slot === "weapon" && player.classId === "paladin"
+                          ? "Escudo"
+                          : label}
+                      </span>
+                      {itemIcon(item, slot as keyof typeof equipmentSlots)}
+                      <b>{item?.name ?? "Sin equipar"}</b>
+                      {item && (
+                        <small>
+                          {[
+                            item.defense && `+${item.defense} DEF`,
+                            item.resistance && `+${item.resistance} RES`,
+                            item.physicalDamage &&
+                              `+${item.physicalDamage} daño físico`,
+                            item.magicDamage &&
+                              `+${item.magicDamage} daño mágico`,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </small>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              {(player.equipment.gloves || player.equipment.pants) && (
+                <div className="legacy-equipment">
+                  {(["gloves", "pants"] as const).map((slot) => {
+                    const id = player.equipment[slot],
+                      item = id ? game.items[id] : undefined;
+                    return item ? (
+                      <button
+                        key={slot}
+                        disabled={!canAct}
+                        onClick={() =>
+                          setInventorySelection({
+                            origin: "equipment",
+                            slot,
+                            itemId: item.id,
+                            revision: game.revision,
+                          })
+                        }
+                      >
+                        {slot === "gloves" ? "Guantes" : "Pantalones"}{" "}
+                        anteriores: {item.name}
+                      </button>
+                    ) : null;
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </section>
       </div>
@@ -513,6 +725,26 @@ export function Controller({
           Finalizar turno <ArrowRight size={16} />
         </button>
       </div>
+      {inventorySelection && selectedItem && (
+        <InventoryDialog
+          key={inventorySelection.itemId}
+          selection={inventorySelection}
+          item={selectedItem}
+          replacedItem={
+            inventorySelection.origin === "bag" && replacedId
+              ? game.items[replacedId]
+              : undefined
+          }
+          bagPosition={player.inventory.indexOf(inventorySelection.itemId)}
+          hasSpace={player.inventory.includes(null)}
+          enabled={canAct && inventorySelection.revision === game.revision}
+          onCancel={() => setInventorySelection(null)}
+          onConfirm={(action) => {
+            command(action, inventorySelection.revision);
+            setInventorySelection(null);
+          }}
+        />
+      )}
     </main>
   );
 }

@@ -39,3 +39,5 @@ Originales conservados en esta carpeta. El proceso `pnpm assets:prepare` genera 
 Spritesheets derivados y animations.json en generated, reproducibles con `pnpm assets:prepare`. Asignaciones, tiempos originales y fallbacks documentados en [inventario general](../../docs/assets.md#animaciones-de-demo). Originales conservados.
 
 La integración actual conserva todos los fotogramas. El tamaño visual es 1,5 casillas (paladín 1,6) sin ampliar colisión. Un paso reproduce una secuencia completa de caminata en 2 s; el guerrero ya tiene W y S, pero aún usa una caminata lateral provisional.
+
+La ficha móvil usa [idle-portrait.webp](generated/idle-portrait.webp), un derivado animado y recortado de `animascion_pasiva.gif`. La selección y el tablero conservan sus recursos específicos; el GIF original no se modifica.

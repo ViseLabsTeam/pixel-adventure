@@ -47,6 +47,7 @@ export function useImpactPresentation(game: GameView | null) {
         (event) =>
           event.actorId &&
           event.targetId &&
+          ["ATTACK", "ENEMY", "MISS"].includes(event.kind) &&
           !prior.events.some((old) => old.id === event.id),
       ),
   );

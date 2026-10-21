@@ -1,0 +1,5 @@
+[
+  { "id": "sentinel", "archetypeId": "sentinel", "x": 3, "y": 5 },
+  { "id": "wisp", "archetypeId": "wisp", "x": 7, "y": 4 },
+  { "id": "goblin", "archetypeId": "goblin", "x": 12, "y": 6 }
+]

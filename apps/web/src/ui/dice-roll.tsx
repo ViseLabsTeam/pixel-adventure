@@ -12,12 +12,17 @@ export function DiceRoll({
   onResolved,
 }: {
   event: RollEvent;
-  kind: "movement" | "attack";
+  kind: "movement" | "d20" | "d6" | "attack";
   reveal: boolean;
   reducedMotion: boolean;
   onResolved?: () => void;
 }) {
-  const dice = kind === "movement" ? [6] : [20, 6];
+  const dice =
+    kind === "movement" || kind === "d6"
+      ? [6]
+      : kind === "d20"
+        ? [20]
+        : [20, 6];
   const [playing, setPlaying] = useState(!reducedMotion);
   const [loaded, setLoaded] = useState<number[]>([]);
   const [failed, setFailed] = useState<number[]>([]);
@@ -29,7 +34,7 @@ export function DiceRoll({
     if (loaded.length < dice.length) return;
     const timer = window.setTimeout(
       () => setPlaying(false),
-      kind === "movement" ? diceTimings.d6 : diceTimings.d20,
+      kind === "movement" || kind === "d6" ? diceTimings.d6 : diceTimings.d20,
     );
     return () => window.clearTimeout(timer);
   }, [event.id, kind, reducedMotion, loaded.length]);
@@ -78,11 +83,11 @@ export function DiceRoll({
       </div>
       <strong>
         {reveal && !playing
-          ? event.dice?.length
-            ? event.dice
-                .map((value, index) => `d${dice[index]}: ${value}`)
-                .join(" · ")
-            : "Fallo"
+          ? event.kind === "ATTACK_MISS_ROLL" || event.kind === "MISS"
+            ? "¡Falló el ataque!"
+            : event.dice?.length
+              ? `${event.dice.map((value, index) => `d${dice[index]}: ${value}`).join(" · ")}${kind === "d6" ? ` · ${event.amount ?? 0} de daño final` : ""}`
+              : "Fallo"
           : playing
             ? "Dados girando…"
             : kind === "movement"

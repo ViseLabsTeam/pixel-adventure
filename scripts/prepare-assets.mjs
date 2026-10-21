@@ -4,7 +4,7 @@ const recipes = JSON.parse(
   await readFile("packages/content/actor-recipes.json", "utf8"),
 );
 const manifest = {};
-for (const [id, { folder, portraitSource }] of Object.entries(
+for (const [id, { folder, portraitSource, clips }] of Object.entries(
   recipes.players,
 )) {
   const directory = `assets/${folder}/generated`;
@@ -14,9 +14,33 @@ for (const [id, { folder, portraitSource }] of Object.entries(
     .resize({ height: 320, kernel: "nearest" })
     .png()
     .toFile(`${directory}/portrait.png`);
+  if (clips.idle) {
+    const source = `assets/${folder}/${clips.idle}`;
+    const dimensions = await sharp(source).metadata();
+    const first = await sharp(source, { page: 0 })
+      .trim({ background: "#00000000" })
+      .toBuffer({ resolveWithObject: true });
+    const margin = 24;
+    const left = Math.max(0, -(first.info.trimOffsetLeft ?? 0) - margin);
+    const top = Math.max(0, -(first.info.trimOffsetTop ?? 0) - margin);
+    const width = Math.min(
+      dimensions.width - left,
+      first.info.width + margin * 2,
+    );
+    const height = Math.min(
+      (dimensions.pageHeight ?? dimensions.height) - top,
+      first.info.height + margin * 2,
+    );
+    await sharp(source, { animated: true })
+      .extract({ left, top, width, height })
+      .resize({ height: 320, kernel: "nearest" })
+      .webp({ quality: 82, effort: 4, loop: 0 })
+      .toFile(`${directory}/idle-portrait.webp`);
+  }
   manifest[id] = {
     source: `${folder}/${portraitSource}`,
     portrait: `${folder}/generated/portrait.png`,
+    idlePortrait: clips.idle ? `${folder}/generated/idle-portrait.webp` : null,
     animation: "spritesheet-demo",
     clips: `${folder}/generated/animations.json`,
   };
@@ -81,3 +105,4 @@ console.log(
 await import("./prepare-animations.mjs");
 await import("./prepare-dice.mjs");
 await import("./prepare-terrain.mjs");
+await import("./prepare-map.mjs");

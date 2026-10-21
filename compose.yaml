@@ -38,6 +38,8 @@ services:
       context: .
       dockerfile: infra/Dockerfile
       target: web
+      args:
+        VITE_SHARE_ORIGIN: ${SHARE_ORIGIN:-}
     ports:
       - "${WEB_PORT:-8088}:80"
     depends_on:

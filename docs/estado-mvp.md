@@ -1,44 +1,96 @@
 # Estado y verificación del MVP
 
-Revisión: **19 de octubre de 2026**. Entrega: demo 0.1.0 en el árbol de trabajo, sin commit creado por el agente. Este registro distingue la demo solicitada de la aventura completa; ver [contrato](demo.md) y [brief](../rpg-cooperativo-brief-mvp.md).
+Revisión: **21 de octubre de 2026**. Entrega: demo 0.1.0 en el árbol de trabajo, sin commit creado por el agente. Este registro distingue la demo solicitada de la aventura completa; ver [contrato](demo.md) y [brief](../rpg-cooperativo-brief-mvp.md).
 
 ## Estado actual
 
-| Área | Estado observado |
-| --- | --- |
-| Arquitectura | Workspace pnpm con apps/web, apps/server, core, protocol y content. TypeScript estricto. |
-| Inicio y lobby | Crear, unirse, recuperar, configuración local, cuatro clases seleccionables y hasta cuatro viajeros. Cada clase se reserva al elegirla y solo puede ocuparla un jugador. |
-| Mesa y celular | Tablero Phaser compartido; ficha React móvil sin tablero, flechas/dados condicionados al turno, salud y ataques. |
-| Inventario | Cuatro espacios de bolsa y cuatro de equipo: casco, guantes, pantalones y pechera. Bonos sin cambio de apariencia. |
-| Encuentro | Mundo explorable de 58 × 70 casillas con cámara, tres enemigos de prueba incluido el goblin, cuatro cofres, fuente y salida de demo. |
-| Servidor y base | Colyseus/HTTP autoritativo, PostgreSQL real, migraciones, recibos e IDs persistentes. |
-| Recuperación | Recarga, reconexión con token durable, código privado de campaña y código de reemplazo de control. |
-| Docker | PostgreSQL 18, backend Node 24 y web Nginx construidos y levantados; base y backend saludables. |
-| Assets | 34 imágenes fuente centralizadas, retratos, dados y spritesheets derivados; guerrero W/S, arquera y goblin integrados. |
-| Pruebas | Motor, PostgreSQL y navegador; resultados y límites de cada iteración abajo. |
-| Pendientes | Colisiones detalladas del escenario, recursos ausentes, balance, habilidades, aventura, percepción, stages, altares, transferencias, CI y dispositivos físicos. |
+| Área            | Estado observado                                                                                                                                                         |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Arquitectura    | Workspace pnpm con apps/web, apps/server, core, protocol y content. TypeScript estricto.                                                                                 |
+| Inicio y lobby  | Crear, unirse, recuperar, configuración local, cuatro clases seleccionables y hasta cuatro viajeros. Cada clase se reserva al elegirla y solo puede ocuparla un jugador. |
+| Mesa y celular  | Tablero Phaser compartido; ficha React móvil sin tablero, flechas/dados condicionados al turno, salud y ataques.                                                         |
+| Inventario      | Cuatro espacios de bolsa, cuatro casillas de pociones en fila y casco, pechera, arma/escudo y botas exclusivos de cada clase. Reparto y posesión validados por el servidor.                       |
+| Encuentro       | Mundo explorable de 58 × 70 casillas con cámara, muros y troncos trazados, 30 enemigos de prueba y 11 cofres de collisionV2, fuente y salida de demo.                    |
+| Servidor y base | Colyseus/HTTP autoritativo, PostgreSQL real, migraciones, recibos e IDs persistentes.                                                                                    |
+| Recuperación    | Recarga, reconexión con token durable, código privado de campaña y código de reemplazo de control.                                                                       |
+| Docker          | PostgreSQL 18, backend Node 24 y web Nginx construidos y levantados; base y backend saludables.                                                                          |
+| Assets          | 37 imágenes fuente centralizadas, retratos, dados y spritesheets derivados; guerrero W/S, arquera y goblin integrados.                                                   |
+| Pruebas         | Motor, PostgreSQL y navegador; resultados y límites de cada iteración abajo.                                                                                             |
+| Pendientes      | Ajustar objetos menores del escenario, recursos ausentes, balance, habilidades, aventura, percepción, stages, altares, transferencias, CI y dispositivos físicos.        |
+
+## Colisiones y árboles — 19/10/2026
+
+Se trazaron 513 casillas de muro o tronco desde [collision.json](../assets/mapas/collision.json) y siete capas transparentes de árboles, sin modificar el PNG fuente. El editor local de Vite abrió el mapa, mostró 501 casillas de muro y 14 de tronco antes de eliminar solapamientos, y descargó el JSON. La inspección visual del mapa completo detectó y corrigió trazos que tapaban un pozo, una escalera y una abertura. Se revisó la vista previa de un personaje detrás y delante del árbol occidental (coordenadas negativas) y debajo de la copa central. Se inspeccionaron recortes individuales; algunas siluetas conservan píxeles del suelo inmediato donde la copa se mezcla con el fondo plano.
+
+`tsx scripts/validate-content.ts` comprobó apariciones, enemigos, cofres, zonas, escaleras y muestras de piedras del piso, más un recorrido desde las apariciones a las zonas. Las cuatro apariciones se ubicaron en `(3…6,7)` para conservar libre el paso hacia arriba. Las 23 pruebas de `core.test.ts` pasaron, incluidas barreras de movimiento y ataque por muro y tronco. También pasaron el chequeo de tipos, las 27 pruebas de paquetes, las 23 pruebas de servidor/integración, la compilación web y `docs:check` (22 documentos y 159 enlaces). La página del editor no figura en `apps/web/dist`. No se ejecutó una prueba de tablero multijugador con el nuevo mapa ni una verificación en dispositivos físicos. Las campañas persistidas mantienen sus bloqueos anteriores.
+
+## Ubicaciones e interactuables — 19/10/2026
+
+El [tutorial](tutorial-editor-mapas.md) describe el editor. Las apariciones y cofres proceden ahora del JSON editable. También se ubicó una planta de prueba en `(9,7)` que entrega una poción una vez, consume una acción y conserva su estado en PostgreSQL; el servidor proyecta su posición y estado, y el control ofrece la interacción adyacente. Las campañas anteriores sin interactuables cargan con una lista vacía. La acción de palancas y otros efectos distintos de recolectar un objeto siguen pendientes.
+
+Verificación: Edge abrió el editor, seleccionó un cofre, cambió su objeto, añadió una planta y conservó los datos tras exportar e importar JSON. Pasaron TypeScript, validación de contenido, 29 pruebas de paquetes (incluidas distancia, bolsa llena y recolección única), 25 pruebas de servidor/integración (incluidas persistencia e idempotencia de la planta), compilación web y servidor, y `docs:check` con 23 documentos y 166 enlaces. No se comprobó una partida completa en dispositivo físico.
+
+## Silueta noroeste — 20/10/2026
+
+Se vació el contorno del árbol noroeste para volver a dibujarlo desde el editor. El tronco y su colisión permanecen; el generador produce seis capas de copa hasta que se complete la séptima. El editor ofrece **Reiniciar silueta** para cualquier árbol. La generación, validación de contenido, TypeScript y enlaces documentales pasaron. La copa noroeste pendiente no cubre personajes visualmente.
+
+## Mapa V1 y equipo — 20/10/2026
+
+La fuente de nuevas partidas pasa a ser [collisionV1](../assets/mapas/collisionV1.json), copiada a `collision.json` sin corregir sus trazos. Genera 1197 casillas bloqueadas, seis copas, cuatro apariciones, diez cofres y ocho plantas. Las apariciones, cofres y zonas conservan recorridos transitables. Siete plantas se alcanzan desde una casilla vecina; `object-5` permanece inaccesible. Tres árboles no tienen tronco marcado y el noroeste no tiene contorno visual. El estado de campañas existentes conserva el mapa con que fueron creadas.
+
+## Carga de gráficos con collisionV1 — 20/10/2026
+
+Se reprodujo el aviso de carga en una mesa nueva: Phaser pedía `tree-northwest.png` aunque la silueta noroeste vacía no genera ese archivo. El tablero ahora carga solo las capas enumeradas por el manifiesto generado. También ordena personajes y copas tomando como referencia el límite superior del mapa; así las apariciones con Y negativa quedan delante del fondo y la copa conserva su orden respecto a los pies. Se amplió el margen vertical de cámara para mostrar el personaje completo cerca del borde. La prueba Playwright `board-graphics.spec.ts` pasó en Docker con dos personajes en `(9,-18)` y `(12,-18)`, sin respuestas HTTP fallidas de assets; se revisó `artifacts/board-graphics.png` y ambos sprites aparecen en el tablero. No se comprobó en el navegador de la partida original del responsable.
+
+## Invitación por red local — 20/10/2026
+
+El QR del lobby usa la dirección configurada mediante `SHARE_ORIGIN` al construir Docker, o el origen de la página si no hay configuración. La dirección y el enlace quedan visibles y editables; una dirección localhost o inválida oculta el QR hasta corregirla. Se configuró la IP Wi-Fi actual en `.env` local, excluido de Git. Playwright abrió el enlace por la IP de red, incorporó un viajero y comprobó su estado «Listo» en la mesa, incluida la conexión de sala. Captura revisada: `artifacts/invitation-lan.png`. Tipos y build Docker pasaron. No se escaneó con una cámara física ni se comprobó el acceso desde un teléfono real; si cambia la IP, debe actualizarse la dirección.
+
+## Enemigos en el editor — 20/10/2026
+
+El editor local permite agregar varias apariciones del mismo tipo, seleccionar desde una lista, arrastrar, cambiar tipo, editar coordenadas y eliminar enemigos. El selector lee [enemy-recipes.json](../packages/content/enemy-recipes.json), compartido con el preset. El JSON exportado conserva ID, tipo y coordenadas; el generador produce `courtyardEnemies`, que reemplaza las posiciones fijas del preset para campañas nuevas. Los guardados existentes conservan sus enemigos. Un JSON antiguo sin `enemies` recupera las ubicaciones originales desde `legacy-enemies.json`; una lista vacía explícita permanece vacía. Se conservaron los tres enemigos y sus posiciones actuales al incorporar el nuevo campo a `collision.json`.
+
+Verificación: 41 pruebas de paquetes, 26 de servidor/PostgreSQL, tipos y compilaciones web/servidor pasaron. Playwright comprobó creación de dos goblins con IDs diferentes, arrastre, edición de tipo y coordenadas negativas, exportación/importación, eliminación y compatibilidad de JSON antiguos; no registró errores de página. Se revisó `artifacts/map-editor-enemies.png`. El parser rechaza tipos desconocidos, IDs repetidos, posiciones no enteras y enemigos superpuestos; generación y validación comprueban obstáculos, ocupación y recorridos. La validación del mapa actual pasó con la advertencia ya existente de la planta inaccesible `object-5`. El editor está disponible en Vite; no se incluye en la web publicada.
+
+## Mapa collisionV2 — 20/10/2026
+
+Se copió [collisionV2.json](../assets/mapas/collisionV2.json) a `collision.json` sin modificar el exportado original; los SHA-256 de ambos archivos coinciden. [collision-pre-v2.json](../assets/mapas/collision-pre-v2.json) conserva la fuente anterior. El contenido generado mantiene 1197 bloqueos y seis copas; incorpora 30 enemigos (15 centinelas, un eco errante y 14 goblins), 11 cofres y ocho plantas, con las cuatro apariciones anteriores. La validación comprobó terreno, obstáculos, superposiciones y recorridos hasta los enemigos y zonas. Persiste la advertencia de la planta `object-5` inaccesible, sin corregir las ubicaciones del responsable.
+
+Pasaron 67 pruebas de paquetes y servidor/PostgreSQL, TypeScript y la compilación Docker. Se actualizó la prueba de limpieza de combate para preparar todos los enemigos y comprobar tantos objetos de botín como cofres haya, sin fijar las cantidades de V1. Playwright comprobó la edición/exportación/importación con V2 y el inicio del tablero con dos controles, sin errores HTTP de assets. Se revisó `artifacts/board-graphics.png`: aparecen ambos personajes y enemigos de V2. Una campaña nueva de la demo Docker persistió 30 enemigos, 11 cofres, ocho plantas y 1197 bloqueos. Las campañas previas conservan su snapshot.
+
+## Objetos compatibles con la clase — 20/10/2026
+
+El [catálogo de ítems](../packages/content/src/items.ts) asigna cada equipo a una clase; las pociones admiten las cuatro. El inicio entrega escudo al paladín, espada al guerrero, bastón al mago y arco a la arquera, con botas y pechera de su clase. El motor valida todas las referencias de bolsa/equipo, el reparto automático, la recolección y las acciones de inventario. Los objetos sin destinatario compatible con espacio permanecen en el cofre. Un rechazo por clase no modifica el estado ni confirma recibo. El editor muestra los objetos y clases desde ese mismo catálogo.
+
+La actualización de guardados `class-items-v1` respalda y convierte el equipo genérico anterior a la variante del propietario, sin cambiar los IDs de instancia, referencias, revisión, turno ni recibos. Se persiste `itemClassRulesVersion: 1` y se rechazan snapshots modernos incompatibles. La conversión del arma de mago conserva el bono numérico y lo aplica al atributo mágico. Se verificaron idempotencia y rollback de respaldo/cambio mediante un trigger de fallo; los guardados de la demo local fueron actualizados al iniciar Docker.
+
+Pasaron 80 pruebas de paquetes y servidor/PostgreSQL y TypeScript. La prueba PostgreSQL de migración también comprobó que los recibos originales se conservan. Docker compiló y arrancó; Playwright incorporó las cuatro clases y verificó que cada bolsa muestra únicamente su equipo. Se revisaron las capturas del mago y la arquera `artifacts/class-items-2.png` y `artifacts/class-items-3.png`. La comprobación móvil detectó que la lista de 30 enemigos de V2 ocultaba los ataques; se limitó la lista con desplazamiento interno. La prueba móvil volvió a pasar a 390 × 844, 375 × 720 y 360 × 640, con ataques visibles y selección del último enemigo mediante el desplazamiento de la lista. Se revisó la captura compacta de Personaje.
+
+Las ranuras nuevas de equipo se muestran como casco arriba de pechera, arma o escudo a su derecha y botas debajo. El bono provisional del escudo de paladín es +2 al daño físico y el de las botas +1 a defensa. Los guardados anteriores conservan sus guantes y pantalones equipados; aparecen como equipo anterior y se pueden desequipar.
+
+Verificación: generación del mapa, validación de contenido con aviso de `object-5`, TypeScript, 30 pruebas de paquetes, 26 de servidor/integración, compilaciones web y servidor, reconstrucción local de Docker y prueba móvil de Playwright a 390 × 844, 375 × 720 y 360 × 640. La vista de inventario a 360 × 640 mostró las cuatro ranuras en las posiciones solicitadas sin desplazamiento.
 
 ## Aceptación y alcance de la evidencia
 
 `PASÓ` se refiere a las comprobaciones indicadas, no al juego completo. `PARCIAL` identifica una parte todavía no demostrada.
 
-| ID | Estado | Evidencia / límite |
-| --- | --- | --- |
-| A01 | PASÓ en Docker | Construcción desde imágenes base, instalación congelada, migraciones y arranque con Compose. El modo dev local tiene build/tipos comprobados; no se probó su arranque en una máquina nueva. |
-| A02 | PASÓ | Edge incorporó cuatro controles distintos (paladín, guerrero, mago y arquera) en una mesa con rol separado. Recuperación comprobada anteriormente con mesa + dos controles. |
-| A03 | PASÓ | Orden del lobby, turno inactivo deshabilitado y rechazo de otro actor/rol en PostgreSQL. |
-| A04 | PASÓ | Seis caras del d6, totales 2/3/4 y segunda tirada rechazada. |
-| A05 | PASÓ | Diagonal inválida en protocolo, aliado/muro/enemigo/borde y movimiento agotado rechazados. |
-| A06 | PASÓ | Acción única, fallo consume acción y cierre de movimiento; equipo comprobado también en interfaz. |
-| A07 | PASÓ | Multiplicadores, redondeo, defensa, mínimo cero y d20=20 sin efecto adicional. |
-| A08 | PASÓ en fixture | Helper de daño desde sigilo usa ×1,50, consume solo d20 y no d6. No hay sigilo jugable. |
-| A09 | PARCIAL | Posición y fase sincronizadas, salud inicial y presentación de barras verificadas. Falta una comprobación E2E dedicada de daño/curación en todas las pantallas. |
-| A10 | PASÓ | Recarga después de tirar y gastar un paso: conserva tirada, personaje y movimiento. |
-| A11 | PASÓ | Reenvío recupera recibo aun con revisión vieja; no aumenta revisión ni repite efectos. Payload diferente con igual ID rechazado. |
-| A12 | PARCIAL | Reinicio real conserva control, posición, tirada y bolsa; identidad/equipo se verifican en integración SQL. Falta un reinicio con salud modificada y equipo cambiado dentro del mismo caso E2E. |
-| A13 | PASÓ, un proceso | Cuatro conexiones concurrentes devuelven una misma sala; recuperación reutiliza campaña. No acredita exclusión entre réplicas. |
-| A14 | PASÓ en fallos ensayados | Trigger SQL fuerza rollback sin recibo; parada real de db muestra error, conserva posición y permite conciliar el mismo comando tras volver. Corte exactamente durante COMMIT no ensayado. |
-| A15 | PARCIAL | Edge con viewport móvil 390 × 844 y tacto; sin desborde horizontal. No se probaron teléfonos físicos ni Safari/WebKit. |
+| ID  | Estado                   | Evidencia / límite                                                                                                                                                                              |
+| --- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A01 | PASÓ en Docker           | Construcción desde imágenes base, instalación congelada, migraciones y arranque con Compose. El modo dev local tiene build/tipos comprobados; no se probó su arranque en una máquina nueva.     |
+| A02 | PASÓ                     | Edge incorporó cuatro controles distintos (paladín, guerrero, mago y arquera) en una mesa con rol separado. Recuperación comprobada anteriormente con mesa + dos controles.                     |
+| A03 | PASÓ                     | Orden del lobby, turno inactivo deshabilitado y rechazo de otro actor/rol en PostgreSQL.                                                                                                        |
+| A04 | PASÓ                     | Seis caras del d6, totales 2/3/4 y segunda tirada rechazada.                                                                                                                                    |
+| A05 | PASÓ                     | Diagonal inválida en protocolo, aliado/muro/enemigo/borde y movimiento agotado rechazados.                                                                                                      |
+| A06 | PASÓ                     | Acción única, fallo consume acción y cierre de movimiento; equipo comprobado también en interfaz.                                                                                               |
+| A07 | PASÓ                     | Multiplicadores, redondeo, defensa, mínimo cero y d20=20 sin efecto adicional.                                                                                                                  |
+| A08 | PASÓ en fixture          | Helper de daño desde sigilo usa ×1,50, consume solo d20 y no d6. No hay sigilo jugable.                                                                                                         |
+| A09 | PARCIAL                  | Posición y fase sincronizadas, salud inicial y presentación de barras verificadas. Falta una comprobación E2E dedicada de daño/curación en todas las pantallas.                                 |
+| A10 | PASÓ                     | Recarga después de tirar y gastar un paso: conserva tirada, personaje y movimiento.                                                                                                             |
+| A11 | PASÓ                     | Reenvío recupera recibo aun con revisión vieja; no aumenta revisión ni repite efectos. Payload diferente con igual ID rechazado.                                                                |
+| A12 | PARCIAL                  | Reinicio real conserva control, posición, tirada y bolsa; identidad/equipo se verifican en integración SQL. Falta un reinicio con salud modificada y equipo cambiado dentro del mismo caso E2E. |
+| A13 | PASÓ, un proceso         | Cuatro conexiones concurrentes devuelven una misma sala; recuperación reutiliza campaña. No acredita exclusión entre réplicas.                                                                  |
+| A14 | PASÓ en fallos ensayados | Trigger SQL fuerza rollback sin recibo; parada real de db muestra error, conserva posición y permite conciliar el mismo comando tras volver. Corte exactamente durante COMMIT no ensayado.      |
+| A15 | PARCIAL                  | Edge con viewport móvil 390 × 844 y tacto; sin desborde horizontal. No se probaron teléfonos físicos ni Safari/WebKit.                                                                          |
 
 ## Ejecuciones del 16/10/2026
 
@@ -137,7 +189,7 @@ Verificación: TypeScript, formato, contenido y 136 enlaces locales válidos; 29
 
 ## Arquera, caminatas del guerrero y tablero adaptable — 17/10/2026
 
-La arquera se puede elegir una vez por mesa con alcance 3, vida 34, defensa 1 y multiplicador físico 1,2 como valores de demo. Sus seis GIF generan retrato y clips de caminata/ataque; falta reposo dedicado. El guerrero recibió W y S; sigue faltando la caminata lateral. Todas las caminatas disponibles duran 2 s por casilla en cliente y servidor. El tablero ajusta su lienzo y cámara al tamaño del contenedor. Las recetas de arte y las plantillas de estadísticas de enemigos permiten reutilizar un tipo en varias apariciones con IDs distintos; los guardados anteriores sin `archetypeId` conservan su ID como referencia visual.
+La arquera se puede elegir una vez por mesa con alcance 3, vida 34, defensa 1 y multiplicador físico 1,2 como valores de demo. En esta revisión inicial, sus seis GIF generaban retrato y clips de caminata/ataque; el reposo dedicado todavía faltaba. El guerrero recibió W y S; sigue faltando la caminata lateral. Todas las caminatas disponibles duran 2 s por casilla en cliente y servidor. El tablero ajusta su lienzo y cámara al tamaño del contenedor. Las recetas de arte y las plantillas de estadísticas de enemigos permiten reutilizar un tipo en varias apariciones con IDs distintos; los guardados anteriores sin `archetypeId` conservan su ID como referencia visual.
 
 Verificación de esta iteración: TypeScript, validación de contenido, 30 pruebas de módulos y 18 de PostgreSQL pasaron, incluida la reserva y carga persistente de la arquera. Docker reconstruido con backend y base saludables; el retrato de la arquera respondió 200 desde Nginx. Playwright incorporó cuatro controles, comprobó la ficha de la arquera y que el lienzo ocupa todo el contenedor; el recorrido principal y la recuperación del mapa también pasaron. No se ha medido FPS en un teléfono físico.
 
@@ -152,3 +204,43 @@ Verificación: TypeScript y build Docker pasaron. Playwright comprobó ausencia 
 La ficha Personaje aumenta el retrato en pantallas altas y mantiene los controles en una sola vista; Inventario aprovecha el espacio inferior para mostrar el mismo retrato. La mesa presenta sobre el mapa el nombre de quien tira, D6 en movimiento y D20+D6 en combate, y revela el resultado o fallo al finalizar la presentación. El evento de movimiento conserva ahora `actorId` para atribuir la tirada sin leer el nombre desde su texto; no altera la aleatoriedad ni el guardado existente.
 
 Verificación: TypeScript, 23 pruebas del motor, compilación Docker y tres recorridos Playwright pasaron. El flujo completo observó D6 de movimiento y D20+D6 de ataque en la mesa, con el nombre del lanzador y el resultado posterior; otro recorrido comprobó la presentación del Centinela. El control mantuvo sus dos vistas sin scroll en 390 × 844, 375 × 720 y 360 × 640, incluidas las interacciones junto a un cofre. Se revisaron capturas del tablero y de ambos retratos móviles. No se probaron teléfonos físicos.
+
+## Ficha móvil según referencia y estadísticas de demo — 19/10/2026
+
+La referencia `ui celular.jpeg` se consultó en Descargas; no forma parte del repositorio. Personaje presenta ficha con imagen y estadísticas arriba, movimiento con D6 y cuatro accesos a consumibles en el centro, y objetivos/ataques abajo. Inventario muestra cuatro espacios de bolsa arriba y el retrato junto a casco, guantes, pantalones y pechera debajo. La acción contextual se coloca en el encabezado de acciones para conservar todo visible a 360 × 640. La decisión posterior separó los cuatro accesos rápidos en casillas de pociones independientes.
+
+La ficha muestra ocho atributos con iconos y valores en dos columnas: precisión, esquive, agilidad, defensa física, resistencia mágica, alcance, daño físico y daño mágico. La barra de vida conserva los HP actuales y máximos. Las estadísticas base tienen límite 10 en la receta provisional por nivel; el equipo se suma después del límite. Los nuevos índices de daño describen el fixture actual y su crecimiento futuro modifica el multiplicador de daño, pero aún no se ganan niveles durante la partida. Las cifras y ritmos de crecimiento no son balance definitivo.
+
+Las cuatro clases muestran derivados WebP animados de sus GIF de reposo en la ficha y clips `idle` en el tablero. El mago y la arquera usan sus nuevos `animacion_pasiva.gif`; `pnpm assets:prepare` genera retratos PNG estáticos para selección y WebP animados para reposo. El tablero ya no excluye al mago del bucle `idle`; sus URLs de metadatos y sprites se versionaron de nuevo para evitar JSON anterior en caché. El guerrero usa temporalmente los fotogramas de `caminata_s.gif` para X y los refleja para −X; sigue pendiente un GIF lateral propio. El `animacion_pasiva.gif` del guerrero es binariamente idéntico a `indie.gif` y se usa como fuente nominal de reposo.
+
+Verificación de esta iteración: compilación y despliegue Docker, TypeScript, validación de contenido, 27 pruebas de contenido/motor, 23 de servidor, formato y 153 enlaces Markdown pasaron. Playwright comprobó ambas pestañas sin scroll y con sus controles visibles en 390 × 844, 375 × 720 y 360 × 640; se revisó también una captura a 360 × 640 con cofre adyacente. El recorrido general E2E se repitió y no se cuenta como aprobado: sus aserciones temporales del D6 fallaron una vez al leer el ancho de la imagen y otra al buscar el nodo después de la tirada. Un recorrido móvil con movimiento registró además un fallo intermitente al confirmar el fin de la animación desde la mesa. Quedan para investigar por separado; no se probó un teléfono físico.
+
+## Acciones de inventario con confirmación — 20/10/2026
+
+La bolsa permite equipar o descartar una pieza mediante una ventana de confirmación; las casillas de pociones permiten usar o descartar una poción. El equipo ocupado permite desequipar únicamente si hay un espacio libre. Al reemplazar equipo, la pieza anterior vuelve al mismo espacio de bolsa de la nueva, incluso con la bolsa llena. Cancelar o Escape conserva el estado; el descarte elimina definitivamente el objeto y consume la acción del turno, como las otras operaciones de inventario. El servidor valida la propiedad y confirma estado, evento y recibo en una transacción; los reintentos recuperan el recibo original.
+
+Verificación: 56 pruebas de paquetes y 33 de servidor aprobadas, incluidos intercambio con bolsa llena, rechazo al desequipar sin espacio, descarte ajeno/equipado, recuperación de recibos y reversión ante fallo de guardado. Compilación Docker y validación de contenido aprobadas; persiste el aviso previo sobre la planta `object-5`. Playwright pasó el recorrido de confirmar/cancelar equipar, desequipar, usar y descartar, incluida recarga posterior al descarte. Se revisó la captura de confirmación a 360 × 640. Este recorrido aisló el módulo gráfico del tablero y usó un coordinador del protocolo para las animaciones; no acredita otra revisión de gráficos ni un teléfono físico. Los intentos iniciales con tablero completo fallaron por falta de actualización visible y registraron tiempos de espera de PostgreSQL; no se consideran aprobados.
+
+## Movimiento y objetivos cercanos — 21/10/2026
+
+La vista Personaje coloca Movimiento y Tu acción lado a lado en celular. La lista de objetivos muestra únicamente enemigos vivos a seis pasos horizontales y verticales o menos, ordenados por distancia al personaje. La selección se actualiza al desplazarse y el botón de ataque queda deshabilitado si el objetivo sale del radio; el servidor conserva la validación del alcance y de la trayectoria del ataque. La percepción de enemigos y la alarma siguen pendientes para la aventura completa.
+
+Verificación: TypeScript, prueba de límites de percepción, documentación y build Docker aprobados. Playwright comprobó paneles contiguos, ausencia de objetivos lejanos y controles dentro de la pantalla a 390 × 844, 375 × 720 y 360 × 640. Se revisaron capturas de 390 × 844 y 360 × 640; no se probó un teléfono físico.
+
+## Casillas de pociones — 21/10/2026
+
+En esa iteración, Personaje mostraba cuatro casillas de pociones en una matriz 2 × 2; la revisión posterior las dispuso en una fila propia. La bolsa mantiene cuatro espacios de equipo independientes. El servidor entrega pociones iniciales, de cofres y plantas a esas casillas; valida cupo, propiedad y clase, y permite usarlas o descartarlas con confirmación. Las campañas anteriores se migran una vez con respaldo `potion-slots-v1`, conservando ID de cada poción, revisión y recibos. Los tipos futuros de poción siguen pendientes de diseño.
+
+Verificación: 93 pruebas de paquetes y servidor/PostgreSQL, TypeScript, validación de contenido, build Docker y `docs:check` aprobados. Playwright verificó las cuatro clases, confirmación de uso y descarte, y la matriz sin desplazamiento a 390 × 844, 375 × 720 y 360 × 640. Se revisaron capturas de 390 × 844 y 360 × 640. Permanece el aviso de contenido anterior sobre `object-5`; no se probó un teléfono físico.
+
+## Presentación de dados, pociones y escudo del paladín — 21/10/2026
+
+Personaje muestra la animación y el resultado de la tirada en una capa sobre la vista; la capa se cierra después de mostrar el resultado. El D6 revela la cifra al terminar su GIF local aunque la mesa aún esté confirmando su animación; el servidor mantiene bloqueado el siguiente paso hasta la confirmación. El botón de terminar movimiento salió de la interfaz. Las cuatro pociones ocupan un contenedor horizontal bajo Movimiento y Tu acción; las flechas son más grandes. El paladín empieza con un escudo y solo puede equipar equipo de su clase; la antigua espada de sus guardados se convierte con respaldo `paladin-shield-v1`, conservando el ID de instancia, las referencias, revisión y recibos.
+
+Verificación: 94 pruebas de paquetes y servidor/PostgreSQL, TypeScript, validación de contenido, documentación y build Docker aprobados. Playwright verificó la distribución sin desplazamiento en 390 × 844, 375 × 720 y 360 × 640, la capa D6 con resultado y cierre, y el escudo inicial de las cuatro clases. Se revisaron capturas móviles a 390 × 844 y 360 × 640. El recorrido E2E general sigue pendiente de actualizar para las coordenadas de aparición de collisionV2: avanzó hasta el primer paso y esperaba la casilla antigua `(2,7)` cuando Ada estaba en `(9,-19)`. La mesa en segundo plano también puede pausar la animación de Phaser en esa prueba. No se probó un teléfono físico.
+
+## Dados de ataque en secuencia — 21/10/2026
+
+Los botones de dados muestran directamente las vistas estáticas D6/D20, sin fondo rectangular. El D6 de movimiento está centrado sobre las flechas; D20 y D6 de ataque quedan uno al lado del otro, bajo las habilidades. Especial y ulti seleccionan la habilidad antes de tirar. `ATTACK` valida y consume la acción, guarda la comprobación de impacto y el D20, y deja `pendingAttack` si acierta. El control habilita `ROLL_ATTACK_D6` solo después de presentar el D20 y recibir la confirmación de la mesa. El segundo comando usa el D20 guardado, calcula el daño y persiste el resultado. El tablero espera a mostrar el resultado final del D6 antes del clip de ataque, el daño y la transición de vida. Un fallo se muestra tras el D20 y no habilita D6. Los guardados anteriores admiten el nuevo campo opcional; los reintentos recuperan los recibos sin repetir dados, recurso ni daño.
+
+Verificación: 62 pruebas de paquetes y duración, 31 pruebas de PostgreSQL, TypeScript, validación de contenido, formato, 185 enlaces documentales y build Docker aprobados. Playwright comprobó los dados y la capa de tirada sin desborde en 390 × 844, 375 × 720 y 360 × 640; se revisó la captura de 360 × 640. La prueba E2E general de combate sigue pendiente de actualizar para las posiciones de collisionV2 y la nueva secuencia. No se probó un teléfono físico.

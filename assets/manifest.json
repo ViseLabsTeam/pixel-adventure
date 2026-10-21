@@ -22,24 +22,28 @@
     "paladin": {
       "source": "paladin/animascion_pasiva.gif",
       "portrait": "paladin/generated/portrait.png",
+      "idlePortrait": "paladin/generated/idle-portrait.webp",
       "animation": "spritesheet-demo",
       "clips": "paladin/generated/animations.json"
     },
     "warrior": {
-      "source": "guerrero/indie.gif",
+      "source": "guerrero/animacion_pasiva.gif",
       "portrait": "guerrero/generated/portrait.png",
+      "idlePortrait": "guerrero/generated/idle-portrait.webp",
       "animation": "spritesheet-demo",
       "clips": "guerrero/generated/animations.json"
     },
     "mage": {
-      "source": "mago/bola_de_fuego_.gif",
+      "source": "mago/animacion_pasiva.gif",
       "portrait": "mago/generated/portrait.png",
+      "idlePortrait": "mago/generated/idle-portrait.webp",
       "animation": "spritesheet-demo",
       "clips": "mago/generated/animations.json"
     },
     "archer": {
-      "source": "arquera/basico_.gif",
+      "source": "arquera/animacion_pasiva.gif",
       "portrait": "arquera/generated/portrait.png",
+      "idlePortrait": "arquera/generated/idle-portrait.webp",
       "animation": "spritesheet-demo",
       "clips": "arquera/generated/animations.json"
     }

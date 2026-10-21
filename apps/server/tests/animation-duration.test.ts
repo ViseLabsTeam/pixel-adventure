@@ -4,6 +4,7 @@ import {
   animationTimings,
   combatPresentation,
   movementStepMs,
+  diceTimings,
 } from "@umbral/content";
 import { prototype } from "@umbral/content/prototype";
 import { animationDuration } from "../src/application/animation-duration";
@@ -27,7 +28,7 @@ describe("duración de presentación", () => {
       ).toBe(movementStepMs);
   });
 
-  it("espera el clip, el resultado y la transición de vida al atacar", () => {
+  it("espera cada dado antes del clip y la transición de vida", () => {
     const game = gameWithPlayer();
     expect(
       animationDuration(
@@ -36,7 +37,21 @@ describe("duración de presentación", () => {
         { type: "ATTACK", targetId: "enemy", ability: "basic" },
         "one",
       ),
-    ).toBe(animationTimings.paladin.basic + combatPresentation.totalMs);
+    ).toBe(diceTimings.d20 + 1250);
+    game.pendingAttack = {
+      actorId: "one",
+      targetId: "enemy",
+      ability: "basic",
+      d20: 10,
+    };
+    expect(
+      animationDuration(game, game, { type: "ROLL_ATTACK_D6" }, "one"),
+    ).toBe(
+      diceTimings.d6 +
+        1250 +
+        animationTimings.paladin.basic +
+        combatPresentation.totalMs,
+    );
   });
 
   it("presenta movimiento enemigo y ataques sucesivos sin adelantar el turno", () => {

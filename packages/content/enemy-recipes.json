@@ -1,0 +1,35 @@
+{
+  "sentinel": {
+    "name": "Centinela del umbral",
+    "maxHp": 24,
+    "defense": 2,
+    "resistance": 1,
+    "accuracy": 5,
+    "dodge": 3,
+    "agility": 2,
+    "range": 1,
+    "movement": 1
+  },
+  "wisp": {
+    "name": "Eco errante",
+    "maxHp": 18,
+    "defense": 1,
+    "resistance": 2,
+    "accuracy": 4,
+    "dodge": 3,
+    "agility": 3,
+    "range": 2,
+    "movement": 1
+  },
+  "goblin": {
+    "name": "Goblin de las ruinas",
+    "maxHp": 20,
+    "defense": 1,
+    "resistance": 1,
+    "accuracy": 5,
+    "dodge": 4,
+    "agility": 4,
+    "range": 1,
+    "movement": 1
+  }
+}

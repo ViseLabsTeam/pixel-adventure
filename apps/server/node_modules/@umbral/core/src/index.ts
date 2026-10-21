@@ -1,5 +1,11 @@
 export type ClassId = "paladin" | "warrior" | "mage" | "archer";
-export type EquipmentSlot = "helmet" | "gloves" | "pants" | "chest";
+export type EquipmentSlot =
+  | "helmet"
+  | "chest"
+  | "weapon"
+  | "boots"
+  | "gloves"
+  | "pants";
 export interface Point {
   x: number;
   y: number;
@@ -12,6 +18,8 @@ export interface Stats {
   defense: number;
   resistance: number;
   range: number;
+  physicalDamage?: number;
+  magicDamage?: number;
   damageType: "physical" | "magic";
   damageMultiplier?: number;
 }
@@ -25,6 +33,7 @@ export interface Player extends Point {
   hp: number;
   stats: Stats;
   inventory: (string | null)[];
+  potions: (string | null)[];
   equipment: Record<EquipmentSlot, string | null>;
 }
 export interface Item {
@@ -37,6 +46,8 @@ export interface Item {
   resistance: number;
   heal: number;
   restoreResource: number;
+  physicalDamage?: number;
+  magicDamage?: number;
 }
 export interface Enemy extends Point {
   id: string;
@@ -73,6 +84,13 @@ export interface Zone extends Point {
   name: string;
   kind: "fountain" | "exit";
 }
+export interface Interactable extends Point {
+  id: string;
+  kind: string;
+  name: string;
+  itemDefinition: string;
+  used: boolean;
+}
 export interface Content {
   version: string;
   classes: Record<ClassId, Stats>;
@@ -87,6 +105,7 @@ export interface Content {
   };
   enemies: Enemy[];
   chests: Chest[];
+  interactables: Interactable[];
   zones: Zone[];
   items: Record<
     string,
@@ -97,8 +116,13 @@ export interface Content {
       resistance: number;
       heal: number;
       restoreResource: number;
+      physicalDamage?: number;
+      magicDamage?: number;
+      allowedClasses: ClassId[];
     }
   >;
+  starterItems: Record<ClassId, string[]>;
+  legacyClassItems: Record<ClassId, Record<string, string>>;
   resource: {
     max: number;
     initial: number;
@@ -118,8 +142,17 @@ export interface Content {
   };
 }
 export interface Game {
+  itemClassRulesVersion: 1;
+  potionSlotsVersion: 1;
+  paladinShieldVersion: 1;
   animationUntil?: number;
   animationPending?: boolean;
+  pendingAttack?: {
+    actorId: string;
+    targetId: string;
+    ability: Ability;
+    d20: number;
+  } | null;
   id: string;
   code: string;
   revision: number;
@@ -136,6 +169,7 @@ export interface Game {
   players: Player[];
   enemies: Enemy[];
   chests: Chest[];
+  interactables: Interactable[];
   zones: Zone[];
   items: Record<string, Item>;
   map: {
@@ -152,8 +186,9 @@ export type Action =
   | { type: "START" | "ROLL_MOVEMENT" | "FINISH_MOVEMENT" | "END_TURN" }
   | { type: "MOVE_STEP"; direction: "UP" | "DOWN" | "LEFT" | "RIGHT" }
   | { type: "ATTACK"; targetId: string; ability?: Ability }
+  | { type: "ROLL_ATTACK_D6" }
   | { type: "INTERACT"; targetId: string }
-  | { type: "EQUIP" | "USE_ITEM"; itemId: string }
+  | { type: "EQUIP" | "USE_ITEM" | "DISCARD_ITEM"; itemId: string }
   | { type: "UNEQUIP"; slot: EquipmentSlot };
 export type Dice = (sides: number) => number;
 export class RuleError extends Error {
@@ -210,6 +245,10 @@ export function effectiveStats(game: Game, player: Player): Stats {
     if (id) {
       stats.defense += game.items[id].defense;
       stats.resistance += game.items[id].resistance;
+      stats.physicalDamage =
+        (stats.physicalDamage ?? 0) + (game.items[id].physicalDamage ?? 0);
+      stats.magicDamage =
+        (stats.magicDamage ?? 0) + (game.items[id].magicDamage ?? 0);
     }
   }
   return stats;
@@ -257,6 +296,9 @@ export function attackPreview(game: Game, player: Player, enemy: Enemy) {
 }
 export function createGame(id: string, code: string, content: Content): Game {
   return {
+    itemClassRulesVersion: 1,
+    potionSlotsVersion: 1,
+    paladinShieldVersion: 1,
     id,
     code,
     revision: 0,
@@ -270,9 +312,11 @@ export function createGame(id: string, code: string, content: Content): Game {
     movementRoll: null,
     movementLeft: 0,
     actionUsed: false,
+    pendingAttack: null,
     players: [],
     enemies: structuredClone(content.enemies),
     chests: structuredClone(content.chests),
+    interactables: structuredClone(content.interactables),
     zones: structuredClone(content.zones),
     items: {},
     map: {
@@ -340,14 +384,44 @@ export function addPlayer(
     stats: { ...content.classes[classId] },
     ...content.map.spawns[slot],
     inventory: [null, null, null, null],
-    equipment: { helmet: null, gloves: null, pants: null, chest: null },
+    potions: [null, null, null, null],
+    equipment: {
+      helmet: null,
+      chest: null,
+      weapon: null,
+      boots: null,
+      gloves: null,
+      pants: null,
+    },
   };
   game.players.push(player);
-  for (const definitionId of ["potion", "travel-pants", "old-chestplate"])
+  for (const definitionId of content.starterItems[classId])
     giveItem(game, player, `${id}:${definitionId}`, definitionId, content);
   addEvent(game, "JOIN", `${name} se sentó a la mesa.`);
   game.revision++;
+  assertInventory(game, content);
   return game;
+}
+export function canOwnItem(
+  content: Content,
+  definitionId: string,
+  classId: ClassId,
+) {
+  return (
+    Object.hasOwn(content.items, definitionId) &&
+    content.items[definitionId].allowedClasses.includes(classId)
+  );
+}
+function requireItemClass(
+  content: Content,
+  definitionId: string,
+  classId: ClassId,
+) {
+  requireRule(
+    canOwnItem(content, definitionId, classId),
+    "ITEM_WRONG_CLASS",
+    "Ese objeto no pertenece a tu clase.",
+  );
 }
 function giveItem(
   game: Game,
@@ -356,19 +430,37 @@ function giveItem(
   definitionId: string,
   content: Content,
 ) {
-  const index = player.inventory.indexOf(null);
-  requireRule(
-    index >= 0,
-    "INVENTORY_FULL",
-    "La bolsa tiene sus cuatro espacios ocupados.",
-  );
+  requireItemClass(content, definitionId, player.classId);
+  const slots = itemSlots(player, content.items[definitionId].slot);
+  const index = freeItemSlot(slots);
   game.items[id] = {
     id,
     definitionId,
     ownerId: player.id,
-    ...content.items[definitionId],
+    ...itemProperties(content, definitionId),
   };
-  player.inventory[index] = id;
+  slots[index] = id;
+}
+function itemSlots(player: Player, slot: EquipmentSlot | null) {
+  return slot === null ? player.potions : player.inventory;
+}
+function freeItemSlot(slots: (string | null)[]) {
+  const index = slots.indexOf(null);
+  requireRule(
+    index >= 0,
+    "INVENTORY_FULL",
+    "No hay espacio en las casillas correspondientes.",
+  );
+  return index;
+}
+function itemProperties(content: Content, definitionId: string) {
+  requireRule(
+    Object.hasOwn(content.items, definitionId),
+    "UNKNOWN_ITEM",
+    "El objeto no está disponible.",
+  );
+  const { allowedClasses, ...properties } = content.items[definitionId];
+  return properties;
 }
 function passable(game: Game, content: Content, p: Point, exceptId: string) {
   return (
@@ -401,7 +493,10 @@ function safeLoot(game: Game, content: Content) {
     const id = `${game.id}:${chest.id}:loot`;
     chest.lootId = id;
     const player = game.players.find(
-      (p) => p.hp > 0 && p.inventory.includes(null),
+      (p) =>
+        p.hp > 0 &&
+        canOwnItem(content, chest.itemDefinition, p.classId) &&
+        itemSlots(p, content.items[chest.itemDefinition].slot).includes(null),
     );
     if (player) giveItem(game, player, id, chest.itemDefinition, content);
     else
@@ -409,7 +504,7 @@ function safeLoot(game: Game, content: Content) {
         id,
         definitionId: chest.itemDefinition,
         ownerId: "",
-        ...content.items[chest.itemDefinition],
+        ...itemProperties(content, chest.itemDefinition),
       };
     addEvent(
       game,
@@ -516,6 +611,7 @@ export function resolve(
   content: Content,
   dice: Dice,
 ): Game {
+  assertInventory(input, content);
   const game = structuredClone(input);
   if (action.type === "START") {
     requireRule(
@@ -551,6 +647,11 @@ export function resolve(
   );
   const player = game.players.find((p) => p.id === actorId)!;
   requireRule(player.hp > 0, "PLAYER_DEAD", "Tu personaje ha caído.");
+  requireRule(
+    !game.pendingAttack || action.type === "ROLL_ATTACK_D6",
+    "ATTACK_PENDING",
+    "Primero tirá el D6 del ataque pendiente.",
+  );
   switch (action.type) {
     case "ROLL_MOVEMENT":
       requireRule(
@@ -631,59 +732,102 @@ export function resolve(
           player.resource + content.resource.basicGain,
         );
       const chance = attackPreview(game, player, enemy).chance;
-      const power =
-        (player.stats.damageMultiplier ?? 1) *
-        (ability === "special"
-          ? content.resource.specialMultiplier
-          : ability === "ultimate"
-            ? content.resource.ultimateMultiplier
-            : 1);
       const label =
         ability === "basic"
           ? "ataque básico"
           : ability === "special"
             ? "ataque especial"
             : "ulti";
-      if (dice(100) <= chance) {
-        const result = rollDamage(
-          dice,
-          player.stats.damageType === "magic"
-            ? enemy.resistance
-            : enemy.defense,
-          false,
-          power,
-        );
-        enemy.hp = Math.max(0, enemy.hp - result.amount);
+      const hit = dice(100) <= chance;
+      const d20 = dice(20);
+      if (hit) {
+        game.pendingAttack = {
+          actorId: player.id,
+          targetId: enemy.id,
+          ability,
+          d20,
+        };
         addEvent(
           game,
-          "ATTACK",
-          player.name +
-            " usa " +
-            label +
-            ": " +
-            result.amount +
-            " de daño a " +
-            enemy.name +
-            ".",
-          result.dice,
+          "ATTACK_D20",
+          `${player.name} tira D20 para ${label}: ${d20}. Ahora debe tirar D6.`,
+          [d20],
           {
             actorId: player.id,
             targetId: enemy.id,
             ability,
-            amount: result.amount,
           },
         );
-      } else
+      } else {
         addEvent(
           game,
-          "MISS",
+          "ATTACK_MISS_ROLL",
           player.name +
             " falla su " +
             label +
             ". La acción y el costo se consumen.",
-          undefined,
+          [d20],
           { actorId: player.id, targetId: enemy.id, ability, amount: 0 },
         );
+      }
+      break;
+    }
+    case "ROLL_ATTACK_D6": {
+      const pending = game.pendingAttack;
+      requireRule(
+        pending && pending.actorId === player.id,
+        "NO_ATTACK_PENDING",
+        "No hay un ataque esperando el D6.",
+      );
+      const enemy = game.enemies.find(
+        (candidate) => candidate.id === pending.targetId,
+      );
+      requireRule(
+        enemy && enemy.hp > 0,
+        "TARGET_GONE",
+        "El objetivo ya no está disponible.",
+      );
+      const d6 = dice(6);
+      const power =
+        (player.stats.damageMultiplier ?? 1) *
+        (pending.ability === "special"
+          ? content.resource.specialMultiplier
+          : pending.ability === "ultimate"
+            ? content.resource.ultimateMultiplier
+            : 1);
+      const amount = damage(
+        pending.d20,
+        d6,
+        player.stats.damageType === "magic" ? enemy.resistance : enemy.defense,
+        false,
+        power,
+      );
+      enemy.hp = Math.max(0, enemy.hp - amount);
+      game.pendingAttack = null;
+      addEvent(
+        game,
+        "ATTACK_D6",
+        `${player.name} tira D6: ${d6}. Daño final: ${amount}.`,
+        [d6],
+        {
+          actorId: player.id,
+          targetId: enemy.id,
+          ability: pending.ability,
+          amount,
+        },
+      );
+      addEvent(
+        game,
+        "ATTACK",
+        `${player.name} causa ${amount} de daño a ${enemy.name}.`,
+        [pending.d20, d6],
+        {
+          actorId: player.id,
+          targetId: enemy.id,
+          ability: pending.ability,
+          amount,
+        },
+      );
       safeLoot(game, content);
       break;
     }
@@ -709,11 +853,16 @@ export function resolve(
       consumeAction(game);
       player.inventory[index] = id;
       player.equipment[action.slot] = null;
+      addEvent(
+        game,
+        "UNEQUIP",
+        `${player.name} desequipa ${game.items[id].name}.`,
+      );
       break;
     }
     case "USE_ITEM": {
       const item = game.items[action.itemId],
-        index = player.inventory.indexOf(action.itemId);
+        index = player.potions.indexOf(action.itemId);
       requireRule(
         item &&
           item.ownerId === player.id &&
@@ -728,7 +877,7 @@ export function resolve(
         content.resource.max,
         player.resource + item.restoreResource,
       );
-      player.inventory[index] = null;
+      player.potions[index] = null;
       delete game.items[item.id];
       addEvent(
         game,
@@ -737,10 +886,32 @@ export function resolve(
       );
       break;
     }
+    case "DISCARD_ITEM": {
+      const item = game.items[action.itemId];
+      const slots = item ? itemSlots(player, item.slot) : player.inventory;
+      const index = slots.indexOf(action.itemId);
+      requireRule(
+        item && item.ownerId === player.id && index >= 0,
+        "ITEM_NOT_OWNED",
+        "Solo podés descartar un objeto de tu bolsa.",
+      );
+      consumeAction(game);
+      slots[index] = null;
+      delete game.items[item.id];
+      addEvent(
+        game,
+        "DISCARD",
+        `${player.name} descarta ${item.name}.`,
+        undefined,
+        { targetId: item.id },
+      );
+      break;
+    }
     case "INTERACT": {
       const chest = game.chests.find((c) => c.id === action.targetId),
-        zone = game.zones.find((z) => z.id === action.targetId);
-      const target = chest ?? zone;
+        zone = game.zones.find((z) => z.id === action.targetId),
+        object = game.interactables.find((o) => o.id === action.targetId);
+      const target = chest ?? zone ?? object;
       requireRule(
         target && distance(player, target) <= 1,
         "OUT_OF_RANGE",
@@ -755,11 +926,32 @@ export function resolve(
           "Los cofres entregan botín al derrotar a todos los enemigos.",
         );
         const item = game.items[chest.lootId];
-        const index = player.inventory.indexOf(null);
-        requireRule(index >= 0, "INVENTORY_FULL", "La bolsa está llena.");
+        requireItemClass(content, item.definitionId, player.classId);
+        const slots = itemSlots(player, item.slot);
+        const index = freeItemSlot(slots);
         consumeAction(game);
         item.ownerId = player.id;
-        player.inventory[index] = item.id;
+        slots[index] = item.id;
+      } else if (object) {
+        requireRule(!object.used, "ALREADY_USED", "Ya se recogió ese objeto.");
+        requireRule(
+          Object.hasOwn(content.items, object.itemDefinition),
+          "UNKNOWN_ITEM",
+          "El objeto no está disponible.",
+        );
+        requireItemClass(content, object.itemDefinition, player.classId);
+        freeItemSlot(
+          itemSlots(player, content.items[object.itemDefinition].slot),
+        );
+        consumeAction(game);
+        const itemId = `${game.id}:${object.id}:gather`;
+        giveItem(game, player, itemId, object.itemDefinition, content);
+        object.used = true;
+        addEvent(
+          game,
+          "GATHER",
+          `${player.name} recoge ${game.items[itemId].name} de ${object.name}.`,
+        );
       } else if (zone?.kind === "fountain") {
         requireRule(
           !game.fountainUsed.includes(player.id),
@@ -787,10 +979,10 @@ export function resolve(
       break;
   }
   game.revision++;
-  assertInventory(game);
+  assertInventory(game, content);
   return game;
 }
-export function assertInventory(game: Game) {
+export function assertInventory(game: Game, content: Content) {
   const seen = new Set<string>();
   for (const player of game.players) {
     requireRule(
@@ -798,8 +990,28 @@ export function assertInventory(game: Game) {
       "INVENTORY_CORRUPT",
       "Bolsa inválida.",
     );
+    requireRule(
+      player.potions.length === 4,
+      "INVENTORY_CORRUPT",
+      "Casillas de pociones inválidas.",
+    );
+    for (const id of player.inventory)
+      if (id)
+        requireRule(
+          game.items[id]?.slot !== null,
+          "INVENTORY_CORRUPT",
+          "Poción en la bolsa.",
+        );
+    for (const id of player.potions)
+      if (id)
+        requireRule(
+          game.items[id]?.slot === null,
+          "INVENTORY_CORRUPT",
+          "Equipo en casilla de pociones.",
+        );
     for (const id of [
       ...player.inventory,
+      ...player.potions,
       ...Object.values(player.equipment),
     ]) {
       if (id) {
@@ -809,13 +1021,20 @@ export function assertInventory(game: Game) {
           "Identidad de objeto inválida.",
         );
         seen.add(id);
+        requireItemClass(content, game.items[id].definitionId, player.classId);
       }
     }
   }
-  for (const item of Object.values(game.items))
+  for (const item of Object.values(game.items)) {
+    requireRule(
+      Object.hasOwn(content.items, item.definitionId),
+      "INVENTORY_CORRUPT",
+      "Objeto desconocido en el guardado.",
+    );
     requireRule(
       !item.ownerId || seen.has(item.id),
       "INVENTORY_CORRUPT",
       "Objeto sin referencia.",
     );
+  }
 }

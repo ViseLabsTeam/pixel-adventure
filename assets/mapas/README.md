@@ -4,9 +4,9 @@ Inventario revisado el **16 de octubre de 2026**. Ver el [inventario general](..
 
 ## Archivo disponible
 
-| Archivo | Formato | Dimensiones | Tamaño |
-| --- | --- | --- | ---: |
-| [Scene_Overview.png](Scene_Overview.png) | PNG | 1200 × 1200 | 836.279 bytes |
+| Archivo                                  | Formato | Dimensiones |        Tamaño |
+| ---------------------------------------- | ------- | ----------- | ------------: |
+| [Scene_Overview.png](Scene_Overview.png) | PNG     | 1200 × 1200 | 836.279 bytes |
 
 La imagen muestra una vista general de un escenario de ruinas con vegetación, caminos, muros, escaleras, cofres y plataformas. Se revisó la imagen completa. Es una composición visual plana: la presencia de esos elementos no les asigna colisión, botín ni comportamiento de juego.
 
@@ -20,7 +20,7 @@ La imagen muestra una vista general de un escenario de ruinas con vegetación, c
 
 ## Integración
 
-La demo usa la imagen como fondo con propiedades lógicas independientes y marcadores superpuestos. La geometría y los obstáculos dibujados dentro del PNG no sustituyen esos marcadores. Las capas editables y el mapa definitivo siguen pendientes.
+La demo usa la imagen como fondo con propiedades lógicas independientes y marcadores superpuestos. [collision.json](collision.json) es la fuente editable de muros, troncos y siluetas de los siete árboles grandes visibles. [collisionV2.json](collisionV2.json) es la fuente de prueba vigente desde el 20/10/2026: incluye 30 enemigos, 11 cofres, ocho plantas y cuatro apariciones. Conserva 1197 bloqueos y seis copas; la silueta noroeste sigue vacía y tres árboles no tienen tronco marcado. Los arbustos, rocas y objetos menores siguen fuera del trazado. [collision-pre-v2.json](collision-pre-v2.json) conserva el mapa anterior a esta incorporación; el archivo V2 original no se modifica.
 
 ## Integración de demo — 16/10/2026
 
@@ -32,4 +32,10 @@ El tablero muestra progreso de carga y permite «Reintentar gráficos» sin rein
 
 ### Escala del piso
 
-El fondo se amplía con escala 70/16: las piedras repiten una celda de 16 píxeles del original y cada una corresponde a una casilla lógica. El origen lógico (0,0) corresponde a (494,366) del PNG; la cámara muestra una ventana y se desplaza por el escenario, incluidos ejes negativos. La silueta transitable se genera desde el PNG; muros, árboles y escaleras aún requieren una capa de colisiones diseñada a mano.
+El fondo se amplía con escala 70/16: las piedras repiten una celda de 16 píxeles del original y cada una corresponde a una casilla lógica. El origen lógico (0,0) corresponde a (494,366) del PNG; la cámara muestra una ventana y se desplaza por el escenario, incluidos ejes negativos. La silueta transitable se genera desde el PNG. El trazado manual de `collision.json` genera [casillas bloqueadas](../../packages/content/src/courtyard-collision.ts) y capas PNG transparentes en `generated/` mediante `node scripts/prepare-map.mjs`, también invocado por `assets:prepare`. La copa solo modifica el orden visual; la colisión corresponde al tronco. El PNG original permanece intacto.
+
+Con Vite en desarrollo, abrir `http://localhost:5173/map-editor.html`. Permite cargar otro PNG, ajustar origen/casilla/zoom, pintar o borrar muros y troncos, delinear árboles, ver las capas con un personaje de prueba e importar/exportar el JSON. El archivo descargado debe revisarse e incorporarse al repositorio para usarlo; el editor no cambia campañas ni la base de datos. La página no se incluye en el bundle de producción.
+
+El [tutorial](../../docs/tutorial-editor-mapas.md) explica cómo marcar también cuatro apariciones, cofres con `itemDefinition` e interactuables. El generador conecta estos puntos al preset de partidas nuevas. Un interactuable entrega una vez el objeto configurado mediante la acción `INTERACT`; otros efectos, como palancas, requieren reglas propias.
+
+El editor también coloca, arrastra, selecciona y elimina enemigos desde el [catálogo](../../packages/content/enemy-recipes.json). `collision.json` guarda cada aparición con ID propio, tipo y coordenadas; `prepare-map.mjs` genera `courtyardEnemies` y el preset crea los enemigos desde esas ubicaciones. Los JSON anteriores sin esa sección conservan los tres enemigos originales definidos en [legacy-enemies.json](legacy-enemies.json); una lista vacía explícita elimina todos los enemigos para las partidas nuevas. No se modificaron los originales `collisionV1.json` ni `collision (1).json`.

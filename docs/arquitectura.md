@@ -57,7 +57,7 @@ Los tests unitarios se colocan junto al módulo que verifican; los de integraci�
 
 Los originales están centralizados por categoría en assets, junto a su inventario; generated contiene derivados reproducibles. La migración conserva los archivos fuente y sus nombres. El stub src/index.ts se retiró al crear las aplicaciones.
 
-Las [recetas de actores](../packages/content/actor-recipes.json) relacionan cada clase o tipo de enemigo con carpeta, retrato, tamaño visual y clips; scripts y tablero las consumen. El contenido exclusivo del servidor define estadísticas de clase, plantillas de enemigo y posiciones iniciales en `prototype.ts`. Una aparición de enemigo tiene ID propio y `archetypeId` para reutilizar la misma receta. Agregar una clase requiere también validar su contrato, retrato y reserva; agregar un enemigo con arte requiere publicar sus derivados en la imagen web.
+Las [recetas de actores](../packages/content/actor-recipes.json) relacionan cada clase o tipo de enemigo con carpeta, retrato, tamaño visual y clips; scripts y tablero las consumen. `prototype.ts` compone el contenido del servidor: estadísticas de clase, [plantillas de enemigo](../packages/content/enemy-recipes.json) y posiciones generadas desde el JSON del mapa. El editor local consume el mismo catálogo de enemigos; no importa el servidor ni modifica campañas. Una aparición de enemigo tiene ID propio y `archetypeId` para reutilizar la misma receta. Agregar una clase requiere también validar su contrato, retrato y reserva; agregar un enemigo con arte requiere publicar sus derivados en la imagen web.
 
 ## 3. Responsabilidades e importaciones
 

@@ -183,13 +183,13 @@ test("pantalla compartida, tres clases únicas, inventario y recarga", async ({
       ),
     )
     .toBe(true);
-  const rolled = await one.locator(".dice-button b").innerText();
+  const rolled = await one.locator(".die-button-label").innerText();
   await one.getByRole("button", { name: "Mover arriba" }).click();
   await expect(
     host.getByRole("img", { name: /Ada: casilla 2,7/ }),
   ).toBeVisible();
   await one.reload();
-  await expect(one.locator(".dice-button b")).toHaveText(rolled);
+  await expect(one.locator(".die-button-label")).toHaveText(rolled);
   await expect(one.locator(".error-banner")).toHaveCount(0);
   await one.screenshot({
     path: "artifacts/controller-mobile.png",
@@ -200,9 +200,13 @@ test("pantalla compartida, tres clases únicas, inventario y recarga", async ({
     fullPage: true,
   });
   await one.getByRole("tab", { name: /Inventario/ }).click();
-  await one.getByRole("button", { name: /Pantalones de viaje/ }).click();
+  await one.getByRole("button", { name: /Botas de viaje/ }).click();
+  await one
+    .getByRole("dialog")
+    .getByRole("button", { name: "Confirmar equipar", exact: true })
+    .click();
   await expect(
-    one.locator(".equipment-slot").filter({ hasText: "Pantalones de viaje" }),
+    one.locator(".equipment-slot").filter({ hasText: "Botas de viaje" }),
   ).toHaveCount(1);
   await one.getByRole("tab", { name: "Personaje" }).click();
   await expect(

@@ -1,6 +1,6 @@
 # Assets del guerrero
 
-Inventario revisado el **17 de octubre de 2026**. Seis GIFs disponibles. Referencia de completitud: las siete categorías del [paladín](../paladin/README.md). Ver también el [inventario general](../../docs/assets.md).
+Inventario revisado el **19 de octubre de 2026**. Siete GIFs disponibles; `animacion_pasiva.gif` y `indie.gif` tienen contenido binario idéntico. Referencia de completitud: las siete categorías del [paladín](../paladin/README.md). Ver también el [inventario general](../../docs/assets.md).
 
 ## Archivos disponibles
 
@@ -9,6 +9,7 @@ Todos tienen un lienzo de **720 × 486** y transparencia declarada. La duración
 | Archivo | Fotogramas | Duración | Contenido observado |
 | --- | ---: | ---: | --- |
 | [indie.gif](indie.gif) | 29 | 1,16 s | Reposo del personaje con espada; equivalente visual de pasiva/idle. Se conserva el nombre `indie`. |
+| [animacion_pasiva.gif](animacion_pasiva.gif) | 29 | 1,16 s | Copia recibida del mismo reposo; es la fuente de la receta visual de demo. |
 | [corte.gif](corte.gif) | 192 | 7,95 s | Corte de espada con estela clara; equivalente visual del ataque básico. |
 | [especial_.gif](especial_.gif) | 192 | 7,95 s | Corte y efecto de fuego; categoría visual de especial. |
 | [ultimate.gif](ultimate.gif) | 185 | 7,66 s | Secuencia con salto/impacto y efectos de energía, fuego y humo; categoría visual de ulti. |
@@ -23,7 +24,7 @@ Falta **la caminata lateral general**, equivalente a la del paladín:
 
 - Caminata general, referencia `caminata.gif`.
 
-Ese es un nombre de referencia, no un archivo existente en esta carpeta. No falta una animación de reposo: `indie.gif` cubre visualmente esa categoría.
+Ese es un nombre de referencia, no un archivo existente en esta carpeta. No falta una animación de reposo: `animacion_pasiva.gif` cubre visualmente esa categoría.
 
 ## Integración pendiente
 
@@ -37,4 +38,4 @@ Originales conservados en esta carpeta. El proceso `pnpm assets:prepare` genera 
 
 Spritesheets derivados y animations.json en generated, reproducibles con `pnpm assets:prepare`. Asignaciones, tiempos originales y fallbacks documentados en [inventario general](../../docs/assets.md#animaciones-de-demo). Originales conservados.
 
-La integración actual conserva todos los fotogramas de las acciones recibidas. El tamaño visual es 1,5 casillas (paladín 1,6) sin ampliar colisión. W y S se reproducen durante 2 s por casilla. Por falta de GIF lateral, el guerrero usa reposo animado, traslación y balanceo horizontal durante 2 s.
+La integración actual conserva todos los fotogramas de las acciones recibidas. El tamaño visual es 1,5 casillas (paladín 1,6) sin ampliar colisión. W y S se reproducen durante 2 s por casilla. Para X se reproduce provisionalmente `caminata_s.gif` durante 2 s y para −X se refleja ese clip. Sigue faltando un GIF lateral propio. La ficha móvil usa el derivado animado `generated/idle-portrait.webp` de `animacion_pasiva.gif`; los originales se conservan.

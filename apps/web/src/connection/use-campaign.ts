@@ -215,9 +215,18 @@ export function useCampaign(session: Session | null) {
       void current?.leave();
     };
   }, [session?.token]);
-  function command(action: Command["action"]) {
+  function command(action: Command["action"], expectedRevision?: number) {
     if (!room.current || !gameRef.current || pendingRef.current || animating)
       return;
+    if (
+      expectedRevision !== undefined &&
+      expectedRevision !== gameRef.current.revision
+    ) {
+      setError(
+        "La partida cambió. Revisá el objeto antes de confirmar otra vez.",
+      );
+      return;
+    }
     const next: Command = {
       commandId: newCommandId(),
       expectedRevision: gameRef.current.revision,
@@ -245,7 +254,7 @@ export function useCampaign(session: Session | null) {
     pending,
     command,
     retry,
-    select: (id: string) => room.current?.send("select", id),
+    select: (id: string | null) => room.current?.send("select", id),
   };
 }
 export type CampaignConnection = ReturnType<typeof useCampaign>;

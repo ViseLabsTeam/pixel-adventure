@@ -7,6 +7,8 @@ export const classes = {
     description: "Su escudo abre camino donde otros retroceden.",
     color: "#e7c67b",
     portrait: "/assets/paladin/generated/portrait.png",
+    idlePortrait: "/assets/paladin/generated/idle-portrait.webp",
+    demoDamage: { physical: 4, magic: 0 },
     attack: "Golpe de escudo",
     range: 1,
   },
@@ -16,6 +18,8 @@ export const classes = {
     description: "Acero, coraje y una razón para seguir luchando.",
     color: "#df896c",
     portrait: "/assets/guerrero/generated/portrait.png",
+    idlePortrait: "/assets/guerrero/generated/idle-portrait.webp",
+    demoDamage: { physical: 7, magic: 0 },
     attack: "Corte de espada",
     range: 1,
   },
@@ -25,6 +29,8 @@ export const classes = {
     description: "Los antiguos secretos responden a su llamado.",
     color: "#aaa0e7",
     portrait: "/assets/mago/generated/portrait.png",
+    idlePortrait: "/assets/mago/generated/idle-portrait.webp",
+    demoDamage: { physical: 1, magic: 9 },
     attack: "Descarga arcana",
     range: 2,
   },
@@ -34,6 +40,8 @@ export const classes = {
     description: "Cada flecha encuentra el camino entre las sombras.",
     color: "#a8d677",
     portrait: "/assets/arquera/generated/portrait.png",
+    idlePortrait: "/assets/arquera/generated/idle-portrait.webp",
+    demoDamage: { physical: 8, magic: 0 },
     attack: "Disparo certero",
     range: 3,
   },
@@ -41,9 +49,9 @@ export const classes = {
 export type ClassId = keyof typeof classes;
 export const equipmentSlots = {
   helmet: "Casco",
-  gloves: "Guantes",
-  pants: "Pantalones",
   chest: "Pechera",
+  weapon: "Arma",
+  boots: "Botas",
 } as const;
 export const guide = {
   name: "El Anfitrión",

@@ -51,29 +51,30 @@ Estas opciones de omisión y el consumo del ataque básico al fallar deben queda
 Cada personaje dispone de dos casillas base más una bonificación determinada por un dado de seis caras:
 
 | Resultado del d6 | Bonificación | Movimiento total |
-| --- | ---: | ---: |
-| 1–2 | 0 | 2 |
-| 3–4 | 1 | 3 |
-| 5–6 | 2 | 4 |
+| ---------------- | -----------: | ---------------: |
+| 1–2              |            0 |                2 |
+| 3–4              |            1 |                3 |
+| 5–6              |            2 |                4 |
 
 Se mantiene la interpretación de una tirada de movimiento por turno, antes de moverse. La frecuencia exacta fuera del combate debe definirse.
 
 - Movimiento por casillas en cuatro direcciones: arriba, abajo, izquierda y derecha.
 - Los personajes no se mueven en diagonal.
+- En la demo, el control muestra como objetivos percibidos a los enemigos vivos situados a seis pasos horizontales y verticales o menos del personaje, en cualquier dirección. La lista se actualiza al moverse; percibir no amplía el alcance de ataque.
 - No se puede atravesar a un aliado.
 
 ### Alcances básicos confirmados
 
-| Clase | Alcance básico |
-| --- | ---: |
-| Paladín | 1 casilla |
-| Guerrero/caballero | 1 casilla |
-| Mago | 2 casillas |
-| Arquero | 3 casillas |
+| Clase              | Alcance básico |
+| ------------------ | -------------: |
+| Paladín            |      1 casilla |
+| Guerrero/caballero |      1 casilla |
+| Mago               |     2 casillas |
+| Arquero            |     3 casillas |
 
 ### Pendiente
 
-- Métrica para medir ataques y percepción: se propone contar pasos horizontales y verticales.
+- Métrica definitiva de la percepción enemiga y de futuras habilidades; el filtro de objetivos del control usa provisionalmente pasos horizontales y verticales.
 - Ocupación por enemigos, cuerpos de jugadores muertos y objetos interactivos.
 - Si los enemigos comparten las mismas restricciones de movimiento que los jugadores.
 - Movimiento y acciones durante exploración sin enemigos alertados.
@@ -82,11 +83,11 @@ Se mantiene la interpretación de una tirada de movimiento por turno, antes de m
 
 ### Tres combinaciones confirmadas
 
-| Tipo | Bloquea movimiento | Bloquea visión | Ejemplo |
-| --- | --- | --- | --- |
-| Sólido y opaco | Sí | Sí | Pared |
-| Oculta y permite pasar | No | Sí | Hierba alta |
-| Impide pasar y permite ver | Sí | No | Pozo |
+| Tipo                       | Bloquea movimiento | Bloquea visión | Ejemplo     |
+| -------------------------- | ------------------ | -------------- | ----------- |
+| Sólido y opaco             | Sí                 | Sí             | Pared       |
+| Oculta y permite pasar     | No                 | Sí             | Hierba alta |
+| Impide pasar y permite ver | Sí                 | No             | Pozo        |
 
 La iluminación no modifica la probabilidad de ataque. La geometría del mapa sigue determinando visibilidad y percepción.
 
@@ -120,6 +121,8 @@ Antes de calcular una probabilidad se valida que el personaje pueda actuar, que 
 
 La comprobación de impacto se realiza en el servidor. El d20 determina el daño base y el d6 determina su bonificación porcentual. El modelo numérico es la base inicial aceptada; el balance podrá ajustarse mediante pruebas.
 
+En la demo, el control presenta esos dados en secuencia: primero D20, con la comprobación de impacto por separado; si falla, muestra el fallo y no pide D6. Si acierta, el jugador tira D6 después de ver el D20 y el daño final se muestra antes del clip de ataque y la reducción de vida. La tirada pendiente y sus resultados son decisiones del servidor guardadas entre ambos pasos; recargar o reintentar no vuelve a tirar.
+
 ## 6. Daño, defensas y críticos
 
 ### Confirmado
@@ -128,10 +131,10 @@ La comprobación de impacto se realiza en el servidor. El d20 determina el daño
 - El d6 determina una bonificación porcentual sobre B, en lugar de sumar su resultado como puntos de daño.
 
 | Resultado del d6 | Bonificación sobre B | Multiplicador M |
-| --- | ---: | ---: |
-| 1–2 | 0 % | 1 |
-| 3–4 | 25 % | 1,25 |
-| 5–6 | 50 % | 1,50 |
+| ---------------- | -------------------: | --------------: |
+| 1–2              |                  0 % |               1 |
+| 3–4              |                 25 % |            1,25 |
+| 5–6              |                 50 % |            1,50 |
 
 Daño bruto = B × M.
 
@@ -229,8 +232,13 @@ El crítico está garantizado si el ataque inicial impacta; la tirada de impacto
 - Consecuencias negativas posibles: mímico, serpiente, trampa y otras por definir.
 - Los jugadores pueden pasarse objetos entre ellos.
 - Cada instancia de objeto es única; no puede duplicarse.
-- Bolsa de cuatro espacios, más cuatro ranuras de equipo: casco, guantes, pantalones y pechera.
+- Un personaje solo puede recibir y tener en su bolsa o equipo objetos compatibles con su clase. No puede recoger, conservar ni equipar objetos exclusivos de otra clase; la restricción también se aplica al botín, recompensas y futuras transferencias. Por ejemplo, un paladín no puede tener arcos de arquera ni botas de mago. Confirmado por el responsable el 20/10/2026.
+- Bolsa de cuatro espacios, más cuatro ranuras de equipo: casco, pechera, arma y botas. En el inventario, el casco queda arriba de la pechera, el arma a su derecha y las botas debajo.
+- Las pociones ocupan cuatro casillas propias en una fila debajo de Movimiento y Tu acción; no consumen espacio de bolsa. Al recibir botín o recolectar, se comprueba el cupo correspondiente. Se prevén pociones de defensa, fuerza y recurso para más adelante; sus efectos aún no están definidos.
+- El paladín equipa escudos en su ranura de arma y no espadas. El escudo inicial sustituye a la espada provisional de la demo; las instancias guardadas se convierten sin cambiar su ID.
 - Estas piezas son objetos obtenibles como botín. Modifican estadísticas, sin cambiar la apariencia del personaje.
+- Se puede descartar un objeto de la bolsa o de las casillas de pociones. Equipar, desequipar, consumir y descartar deben pedir confirmación explícita para evitar acciones accidentales; cancelar no ejecuta la acción.
+- Desequipar requiere un espacio libre en la bolsa. Al equipar una pieza en una ranura ocupada, ambas piezas se intercambian: la anterior ocupa exactamente el espacio de bolsa de la nueva, incluso con bolsa llena. Confirmado por el responsable el 20/10/2026.
 
 ### Requisitos operativos propuestos
 
@@ -254,6 +262,8 @@ El crítico está garantizado si el ataque inicial impacta; la tirada de impacto
 - Es posible avanzar sin matar enemigos y sin obtener botín.
 - Las zonas posteriores tienen enemigos más fuertes, por lo que evitar combates y recompensas dificulta el avance.
 - Los personajes suben de nivel durante la aventura y mejoran sus estadísticas base.
+- Cada clase prioriza estadísticas distintas al subir de nivel. Las estadísticas puntuadas tienen un máximo base de 10; el equipo puede elevarlas por encima de ese límite. Los valores y ritmos concretos siguen pendientes de balance.
+- La ficha muestra daño físico y mágico junto con los atributos puntuados; la barra de vida indica HP actuales y máximos.
 - El equipo obtenido modifica sus estadísticas.
 - Al pasar de stage recuperan la mitad de la vida que habían perdido.
 - Completar el juego termina la partida. Puede iniciarse otra.
@@ -303,16 +313,16 @@ El servidor conserva una instantánea persistente del estado. El guardado autom�
 
 Para una sola acción, el resultado y el cambio de estado deben persistirse juntos. Cargar una partida restaura un resultado ya resuelto; no vuelve a sortearlo. La continuación recupera el último punto confirmado.
 
-| Área | Datos necesarios |
-| --- | --- |
-| Identidad y reglas | Identificador de partida, versión del formato, versión de reglas y contenido, estado activa/pausada/ganada/perdida y mecanismo de código privado de recuperación. |
-| Grupo | Posiciones del lobby, asociación de cada jugador con su personaje y mecanismo para recuperar el control. |
-| Personajes | Clase, nivel, experiencia, salud, estadísticas base, modificaciones, equipo, inventario, recursos, efectos, posición, condición vivo/muerto y estado de espera después de cruzar la salida de stage. |
-| Mundo | Stage y sala actual, salas visitadas, puertas y objetivos resueltos, posiciones y estados de objetos. |
-| Enemigos | Salud, posición, orientación, recursos, condición, percepción/alarma y objetivos o última posición conocida cuando proceda. |
-| Cofres y botín | Cofres abiertos, resultados ya determinados, consecuencias activadas e identificadores y propietarios únicos de objetos. |
-| Turnos | Número de ronda, fase jugadores/enemigos, actor activo, jugadores pendientes de cruzar, fase movimiento/acción, tirada de movimiento ya realizada y casillas restantes. |
-| Resultados | Tiradas resueltas, eventos confirmados e identificadores de comandos procesados para impedir duplicación. Si se usa aleatoriedad reproducible, estado del generador. |
+| Área               | Datos necesarios                                                                                                                                                                                     |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Identidad y reglas | Identificador de partida, versión del formato, versión de reglas y contenido, estado activa/pausada/ganada/perdida y mecanismo de código privado de recuperación.                                    |
+| Grupo              | Posiciones del lobby, asociación de cada jugador con su personaje y mecanismo para recuperar el control.                                                                                             |
+| Personajes         | Clase, nivel, experiencia, salud, estadísticas base, modificaciones, equipo, inventario, recursos, efectos, posición, condición vivo/muerto y estado de espera después de cruzar la salida de stage. |
+| Mundo              | Stage y sala actual, salas visitadas, puertas y objetivos resueltos, posiciones y estados de objetos.                                                                                                |
+| Enemigos           | Salud, posición, orientación, recursos, condición, percepción/alarma y objetivos o última posición conocida cuando proceda.                                                                          |
+| Cofres y botín     | Cofres abiertos, resultados ya determinados, consecuencias activadas e identificadores y propietarios únicos de objetos.                                                                             |
+| Turnos             | Número de ronda, fase jugadores/enemigos, actor activo, jugadores pendientes de cruzar, fase movimiento/acción, tirada de movimiento ya realizada y casillas restantes.                              |
+| Resultados         | Tiradas resueltas, eventos confirmados e identificadores de comandos procesados para impedir duplicación. Si se usa aleatoriedad reproducible, estado del generador.                                 |
 
 Las animaciones se reconstruyen desde los eventos o el estado confirmado. No hace falta guardar un fotograma del tablero.
 

@@ -12,6 +12,7 @@ export const animationTimings = {
   },
   warrior: {
     idle: 1260,
+    walk: 2000,
     walkUp: 2000,
     walkDown: 2000,
     basic: 8050,
@@ -19,6 +20,7 @@ export const animationTimings = {
     ultimate: 7760,
   },
   mage: {
+    idle: 3550,
     walk: 2000,
     walkUp: 2000,
     walkDown: 2000,
@@ -27,6 +29,7 @@ export const animationTimings = {
     ultimate: 4050,
   },
   archer: {
+    idle: 4180,
     walk: 2000,
     walkUp: 2000,
     walkDown: 2000,

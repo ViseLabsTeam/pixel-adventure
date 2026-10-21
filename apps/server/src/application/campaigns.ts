@@ -476,6 +476,7 @@ export function projectView(
     movementRoll: game.movementRoll,
     movementLeft: game.movementLeft,
     actionUsed: game.actionUsed,
+    pendingAttack: game.pendingAttack ?? null,
     players: game.players.map((p) => ({
       ...p,
       stats: effectiveStats(game, p),
@@ -490,9 +491,25 @@ export function projectView(
       maxHp,
     })),
     chests: game.chests.map(({ id, x, y, opened }) => ({ id, x, y, opened })),
+    interactables: game.interactables.map(({ id, kind, name, x, y, used }) => ({
+      id,
+      kind,
+      name,
+      x,
+      y,
+      used,
+    })),
     zones: game.zones,
     map: game.map,
-    items: game.items,
+    items: Object.fromEntries(
+      Object.entries(game.items).map(([id, item]) => [
+        id,
+        {
+          ...item,
+          allowedClasses: prototype.items[item.definitionId].allowedClasses,
+        },
+      ]),
+    ),
     events: game.events,
     onlinePlayerIds: onlineIds,
     paused:

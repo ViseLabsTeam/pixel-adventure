@@ -47,11 +47,11 @@ test("reinicio durable, fallo de base, conciliación y reemplazo de control", as
     await host.getByRole("button", { name: "Comenzar la aventura" }).click();
     const one = phones[0];
     await one.getByRole("button", { name: /Tirar movimiento/ }).click();
-    await expect(one.locator(".dice-button b")).toHaveText(/d6 · [1-6]/);
+    await expect(one.locator(".die-button-label")).toHaveText(/D6: [1-6]/);
     await expect(
       one.getByRole("button", { name: "Mover arriba" }),
     ).toBeEnabled();
-    const dice = await one.locator(".dice-button b").innerText();
+    const dice = await one.locator(".die-button-label").innerText();
     const items = await one.locator(".bag-slot").allTextContents();
     const position = await host
       .getByRole("img", { name: /Tablero por casillas/ })
@@ -80,7 +80,7 @@ test("reinicio durable, fallo de base, conciliación y reemplazo de control", as
     await expect(
       host.getByRole("img", { name: /Tablero por casillas/ }),
     ).toHaveAttribute("aria-label", position!);
-    await expect(one.locator(".dice-button b")).toHaveText(dice);
+    await expect(one.locator(".die-button-label")).toHaveText(dice);
     expect(await one.locator(".bag-slot").allTextContents()).toEqual(items);
     compose("stop", "db");
     databaseStopped = true;
@@ -117,7 +117,7 @@ test("reinicio durable, fallo de base, conciliación y reemplazo de control", as
       host.getByRole("img", { name: /Ema: casilla 2,7/ }),
     ).toBeVisible();
     await expect(one.locator(".error-banner")).toHaveCount(0);
-    await expect(one.locator(".dice-button b")).toHaveText(dice);
+    await expect(one.locator(".die-button-label")).toHaveText(dice);
     await host
       .getByText("Recuperar un control perdido", { exact: true })
       .click();
@@ -143,7 +143,7 @@ test("reinicio durable, fallo de base, conciliación y reemplazo de control", as
     await recovered
       .getByRole("button", { name: "Recuperar personaje", exact: true })
       .click();
-    await expect(recovered.locator(".dice-button b")).toHaveText(dice);
+    await expect(recovered.locator(".die-button-label")).toHaveText(dice);
     expect(await recovered.locator(".bag-slot").allTextContents()).toEqual(
       items,
     );

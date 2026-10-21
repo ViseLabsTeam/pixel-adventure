@@ -39,7 +39,16 @@ export function validateSave(input: unknown): Game {
       "INCOMPATIBLE_SAVE",
       "El guardado tiene un formato incompatible o incompleto.",
     );
-  const value = parsed.data;
+  const value: Game = {
+    ...parsed.data,
+    itemClassRulesVersion: 1,
+    potionSlotsVersion: 1,
+    paladinShieldVersion: 1,
+    players: parsed.data.players.map((player) => ({
+      ...player,
+      potions: player.potions ?? [null, null, null, null],
+    })),
+  };
   if (
     value.saveSchemaVersion !== 2 ||
     value.contentVersion !== prototype.version ||
@@ -49,7 +58,54 @@ export function validateSave(input: unknown): Game {
       "INCOMPATIBLE_SAVE",
       "Este guardado necesita una migración antes de continuar.",
     );
-  assertInventory(value);
+  if (parsed.data.itemClassRulesVersion === undefined) {
+    for (const item of Object.values(value.items)) {
+      const owner = value.players.find((player) => player.id === item.ownerId);
+      const variants = owner && prototype.legacyClassItems[owner.classId];
+      const replacement =
+        variants && Object.hasOwn(variants, item.definitionId)
+          ? variants[item.definitionId]
+          : undefined;
+      if (!replacement) continue;
+      item.definitionId = replacement;
+      item.name = prototype.items[replacement].name;
+      if (owner?.classId === "mage" && item.slot === "weapon") {
+        item.magicDamage = item.physicalDamage ?? item.magicDamage;
+        delete item.physicalDamage;
+      }
+    }
+  }
+  if (parsed.data.paladinShieldVersion === undefined) {
+    for (const item of Object.values(value.items)) {
+      if (item.definitionId !== "rusty-sword") continue;
+      const owner = value.players.find((player) => player.id === item.ownerId);
+      if (owner?.classId !== "paladin") continue;
+      item.definitionId = "paladin-shield";
+      item.name = prototype.items["paladin-shield"].name;
+    }
+  }
+  if (parsed.data.potionSlotsVersion === undefined) {
+    for (const player of value.players) {
+      for (let index = 0; index < player.inventory.length; index++) {
+        const id = player.inventory[index];
+        if (!id || value.items[id]?.slot !== null) continue;
+        const potionIndex = player.potions.indexOf(null);
+        if (potionIndex < 0)
+          throw new RuleError(
+            "INCOMPATIBLE_SAVE",
+            "El guardado contiene demasiadas pociones.",
+          );
+        player.potions[potionIndex] = id;
+        player.inventory[index] = null;
+      }
+    }
+  } else if (parsed.data.players.some((player) => !player.potions)) {
+    throw new RuleError(
+      "INCOMPATIBLE_SAVE",
+      "Faltan las casillas de pociones del guardado.",
+    );
+  }
+  assertInventory(value, prototype);
   return value;
 }
 export async function readGame(id: string) {
@@ -66,7 +122,7 @@ export async function writeGame(
   previous: Game,
   next: Game,
 ) {
-  assertInventory(next);
+  assertInventory(next, prototype);
   next.events = next.events.slice(-40);
   const result = await client.query(
     "UPDATE campaigns SET snapshot=$1,revision=$2,updated_at=now() WHERE id=$3 AND revision=$4",
