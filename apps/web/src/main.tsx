@@ -67,21 +67,17 @@ function App() {
     <div
       className={`app ${tableMode ? "table-mode" : ""} ${preferences.reducedMotion ? "reduced-motion" : ""}`}
     >
-      <Header
-        onHome={home}
-        onSettings={() => setSettings(true)}
-        connected={session ? connection.connected : undefined}
-      />
+      {!tableMode && (
+        <Header
+          onHome={home}
+          onSettings={() => setSettings(true)}
+          connected={session ? connection.connected : undefined}
+        />
+      )}
       {!tableMode && session && connection.error && (
         <div className="error-banner" role="alert">
           {connection.error}
           <button onClick={connection.retry}>Reintentar</button>
-        </div>
-      )}
-      {!tableMode && session && connection.game?.paused && (
-        <div className="pause-banner">
-          La mesa está esperando que vuelva el jugador activo. El turno está
-          guardado.
         </div>
       )}
       {!session ? (
@@ -110,6 +106,8 @@ function App() {
           connection={activeConnection}
           session={session}
           preferences={preferences}
+          onHome={home}
+          onSettings={() => setSettings(true)}
         />
       )}
       {session?.role === "COORDINATOR" &&

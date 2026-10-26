@@ -132,7 +132,6 @@ export function Controller({
     connected &&
     !pending &&
     !connection.animating &&
-    !game.paused &&
     !game.storageError;
   const canMove = enabled && game.phase === "MOVEMENT" && game.movementLeft > 0,
     canAct = enabled && !game.actionUsed;

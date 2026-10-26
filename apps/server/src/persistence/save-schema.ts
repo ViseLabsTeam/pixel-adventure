@@ -17,6 +17,7 @@ const stats = z.object({
   magicDamage: integer.max(10).optional(),
 });
 export const saveSchema = z.object({
+  mode: z.enum(["LOCAL", "ONLINE"]).default("LOCAL"),
   itemClassRulesVersion: z.literal(1).optional(),
   potionSlotsVersion: z.literal(1).optional(),
   paladinShieldVersion: z.literal(1).optional(),
@@ -25,6 +26,8 @@ export const saveSchema = z.object({
   revision: integer,
   animationUntil: integer.optional(),
   animationPending: z.boolean().optional(),
+  turnRemainingMs: integer.max(20_000).optional(),
+  turnDeadlineAt: integer.nullable().optional(),
   pendingAttack: z
     .object({
       actorId: z.string(),

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Client, type Room } from "@colyseus/sdk";
+import { isRetryableFailure } from "./command-retry";
 import type {
   Command,
   GameView,
@@ -161,7 +162,7 @@ export function useCampaign(session: Session | null) {
           }
           const failure = parsed.data;
           setError(failure.message);
-          if (failure.code !== "STORAGE_UNAVAILABLE") {
+          if (!isRetryableFailure(failure.code)) {
             pendingRef.current = null;
             setPending(null);
             sessionStorage.removeItem(storageKey);

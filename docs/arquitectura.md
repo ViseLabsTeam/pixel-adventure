@@ -121,6 +121,8 @@ En la demo, el bloqueo de fila PostgreSQL serializa las operaciones de campaña,
 | Vistas de red | `server/rooms` y `protocol` | Estado autorizado para tablero o controlador. |
 | Presentación local | `web` | Animaciones, paneles abiertos, transiciones y selección local. |
 
+La campaña guarda `mode: LOCAL | ONLINE` como dato de acceso. Su ausencia en un snapshot anterior se interpreta como `LOCAL`. Ambos modos reutilizan la misma sala, sesiones autorizadas y resolución de reglas: en online el anfitrión muestra la mesa por videollamada y los controles se conectan al mismo origen público mediante HTTPS y WSS. El modo no convierte al coordinador en jugador ni concede acceso a la mesa a quien solo tenga el código público de invitación.
+
 Mantener adaptadores explícitos. Una clase de Colyseus no es el formato de guardado y un componente React no conserva la única copia de la partida.
 
 | Identificador | Duración y función |

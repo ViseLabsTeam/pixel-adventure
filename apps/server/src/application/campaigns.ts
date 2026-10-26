@@ -1,6 +1,7 @@
 import { animationDuration } from "./animation-duration.js";
 import { randomBytes, randomInt, randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
+import type { PoolClient } from "pg";
 import {
   addPlayer,
   createGame,
@@ -13,6 +14,7 @@ import {
 import { prototype } from "@umbral/content/prototype";
 import { animationGraceMs } from "@umbral/content";
 import {
+  createCampaignSchema,
   commandSchema,
   joinSchema,
   availabilitySchema,
@@ -32,6 +34,122 @@ import {
 } from "../persistence/database.js";
 export const updates = new EventEmitter();
 updates.setMaxListeners(1000);
+const turnDurationMs = 20_000;
+
+function settleTurnClock(game: Game, now: number): Game {
+  if (game.status !== "ACTIVE") return game;
+  let next = game;
+  if (next.turnRemainingMs === undefined || next.turnDeadlineAt === undefined) {
+    next = {
+      ...next,
+      turnRemainingMs: turnDurationMs,
+      turnDeadlineAt:
+        next.animationPending || (next.animationUntil ?? 0) > now
+          ? null
+          : now + turnDurationMs,
+    };
+  }
+  if (next.turnDeadlineAt === null && (next.animationUntil ?? 0) <= now) {
+    next = {
+      ...next,
+      animationPending: false,
+      turnDeadlineAt: now + (next.turnRemainingMs ?? turnDurationMs),
+    };
+  }
+  return next;
+}
+
+function clockAfterAction(
+  previous: Game,
+  next: Game,
+  now: number,
+  duration: number,
+) {
+  if (next.status !== "ACTIVE") {
+    next.turnRemainingMs = 0;
+    next.turnDeadlineAt = null;
+    return;
+  }
+  const newTurn = next.activePlayerId !== previous.activePlayerId;
+  const remaining = newTurn
+    ? turnDurationMs
+    : Math.max(0, (previous.turnDeadlineAt ?? now) - now);
+  next.turnRemainingMs = remaining;
+  next.turnDeadlineAt = duration
+    ? null
+    : newTurn
+      ? now + remaining
+      : (previous.turnDeadlineAt ?? now + remaining);
+}
+
+async function expireTurnLocked(
+  client: PoolClient,
+  previous: Game,
+  current: Game,
+  now: number,
+) {
+  const actorId = current.activePlayerId;
+  if (!actorId) return current;
+  const action = current.pendingAttack
+    ? ({ type: "ROLL_ATTACK_D6" } as const)
+    : ({ type: "END_TURN" } as const);
+  const next = resolve(current, actorId, action, prototype, (sides) =>
+    randomInt(1, sides + 1),
+  );
+  const duration = animationDuration(current, next, action, actorId);
+  next.animationUntil = duration ? now + duration + animationGraceMs : 0;
+  next.animationPending = duration > 0;
+  clockAfterAction(current, next, now, duration);
+  const suffix = current.pendingAttack ? "damage" : "turn";
+  const digest = hash(
+    `${current.id}:${current.round}:${actorId}:timeout:${suffix}`,
+  );
+  const variant = "89ab"[parseInt(digest[16], 16) % 4];
+  const commandId = `${digest.slice(0, 8)}-${digest.slice(8, 12)}-8${digest.slice(13, 16)}-${variant}${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
+  const priorIds = new Set(previous.events.map((event) => event.id));
+  const receipt: Receipt = {
+    commandId,
+    revision: next.revision,
+    events: next.events.filter((event) => !priorIds.has(event.id)),
+  };
+  await writeGame(client, previous, next);
+  await client.query(
+    "INSERT INTO command_receipts(campaign_id,actor_id,command_id,payload_hash,result) VALUES($1,$2,$3,$4,$5)",
+    [current.id, "SYSTEM", commandId, digest, JSON.stringify(receipt)],
+  );
+  return next;
+}
+
+export async function tickTurn(campaignId: string) {
+  const result = await transaction(async (client) => {
+    const row = (
+      await client.query(
+        "SELECT snapshot FROM campaigns WHERE id=$1 FOR UPDATE",
+        [campaignId],
+      )
+    ).rows[0];
+    if (!row) throw new RuleError("NOT_FOUND", "No encontramos esa mesa.");
+    const previous = validateSave(row.snapshot);
+    const now = Date.now();
+    const current = settleTurnClock(previous, now);
+    if (
+      current.status === "ACTIVE" &&
+      current.turnDeadlineAt !== null &&
+      current.turnDeadlineAt !== undefined &&
+      current.turnDeadlineAt <= now
+    ) {
+      await expireTurnLocked(client, previous, current, now);
+      return true;
+    }
+    if (current !== previous) {
+      await writeGame(client, previous, current);
+      return true;
+    }
+    return false;
+  });
+  if (result) updates.emit(campaignId);
+  return result;
+}
 export type Auth = {
   campaignId: string;
   role: Session["role"];
@@ -64,12 +182,14 @@ export async function authenticate(credential: string): Promise<Auth> {
     tokenHash: hash(credential),
   };
 }
-export async function createCampaign() {
+export async function createCampaign(input: unknown = {}) {
+  const { mode } = createCampaignSchema.parse(input);
   const id = randomUUID(),
     credential = token(),
     recoveryCode = token(),
     joinCode = code(),
     game = createGame(id, joinCode, prototype);
+  game.mode = mode;
   await transaction(async (client) => {
     await client.query(
       "INSERT INTO campaigns(id,code,recovery_hash,revision,snapshot) VALUES($1,$2,$3,0,$4)",
@@ -345,7 +465,7 @@ export async function execute(
     command = commandSchema.parse(input),
     actor = auth.playerId ?? auth.role,
     payloadHash = hash(JSON.stringify(command));
-  const receipt = await transaction(async (client) => {
+  const outcome = await transaction(async (client) => {
     const row = (
       await client.query(
         "SELECT snapshot FROM campaigns WHERE id=$1 FOR UPDATE",
@@ -373,9 +493,20 @@ export async function execute(
           "COMMAND_REUSED",
           "El identificador ya se usó para otro comando.",
         );
-      return saved.result as Receipt;
+      return { kind: "receipt" as const, receipt: saved.result as Receipt };
     }
-    if (command.expectedRevision !== previous.revision)
+    const now = Date.now();
+    const current = settleTurnClock(previous, now);
+    if (
+      current.status === "ACTIVE" &&
+      current.turnDeadlineAt !== null &&
+      current.turnDeadlineAt !== undefined &&
+      current.turnDeadlineAt <= now
+    ) {
+      await expireTurnLocked(client, previous, current, now);
+      return { kind: "expired" as const };
+    }
+    if (command.expectedRevision !== current.revision)
       throw new RuleError(
         "STALE_REVISION",
         "La mesa se actualizó. Volvé a intentar con el estado actual.",
@@ -386,7 +517,7 @@ export async function execute(
           "FORBIDDEN",
           "Solo el coordinador inicia la aventura.",
         );
-      if (previous.players.some((p) => !onlineIds.includes(p.id)))
+      if (current.players.some((p) => !onlineIds.includes(p.id)))
         throw new RuleError(
           "PLAYER_OFFLINE",
           "Todos los controles deben estar conectados para empezar.",
@@ -397,40 +528,28 @@ export async function execute(
           "FORBIDDEN",
           "Esta pantalla no controla un personaje.",
         );
-      if (
-        previous.activePlayerId &&
-        !onlineIds.includes(previous.activePlayerId)
-      )
-        throw new RuleError(
-          "PLAYER_OFFLINE",
-          "La partida espera al jugador activo.",
-        );
     }
-    if (
-      previous.animationPending ||
-      (previous.animationUntil ?? 0) > Date.now()
-    )
+    if (current.animationPending || (current.animationUntil ?? 0) > now)
       throw new RuleError(
         "ANIMATION_PLAYING",
         "Esperá a que termine la animación.",
       );
     const next = resolve(
-      previous,
+      current,
       auth.playerId,
       command.action,
       prototype,
       (sides) => randomInt(1, sides + 1),
     );
     const duration = animationDuration(
-      previous,
+      current,
       next,
       command.action,
       auth.playerId,
     );
-    next.animationUntil = duration
-      ? Date.now() + duration + animationGraceMs
-      : 0;
+    next.animationUntil = duration ? now + duration + animationGraceMs : 0;
     next.animationPending = duration > 0;
+    clockAfterAction(current, next, now, duration);
     const ids = new Set(previous.events.map((e) => e.id)),
       result: Receipt = {
         commandId: command.commandId,
@@ -448,10 +567,12 @@ export async function execute(
         JSON.stringify(result),
       ],
     );
-    return result;
+    return { kind: "receipt" as const, receipt: result };
   });
   updates.emit(auth.campaignId);
-  return receipt;
+  if (outcome.kind === "expired")
+    throw new RuleError("TURN_EXPIRED", "Se agotó el tiempo de este turno.");
+  return outcome.receipt;
 }
 export function projectView(
   game: Game,
@@ -460,12 +581,14 @@ export function projectView(
   selectedTarget: string | null,
   storageError = false,
 ): GameView {
-  const player = game.players.find((p) => p.id === auth.playerId),
-    actor = game.players.find((p) => p.id === game.activePlayerId);
+  const player = game.players.find((p) => p.id === auth.playerId);
   return {
+    mode: game.mode,
     animationPending: game.animationPending ?? false,
     animationUntil: game.animationUntil ?? 0,
     serverNow: Date.now(),
+    turnRemainingMs: game.turnRemainingMs ?? 0,
+    turnDeadlineAt: game.turnDeadlineAt ?? null,
     id: game.id,
     code: game.code,
     revision: game.revision,
@@ -512,8 +635,7 @@ export function projectView(
     ),
     events: game.events,
     onlinePlayerIds: onlineIds,
-    paused:
-      game.status === "ACTIVE" && !!actor && !onlineIds.includes(actor.id),
+    paused: false,
     targets: player
       ? Object.fromEntries(
           game.enemies.map((e) => [e.id, attackPreview(game, player, e)]),
@@ -549,7 +671,11 @@ export async function finishAnimation(credential: string, revision: number) {
       throw new RuleError("UNAUTHORIZED", "Sesión reemplazada.");
     const game = validateSave(row.snapshot);
     if (game.revision !== revision || !game.animationPending) return false;
-    await writeGame(client, game, { ...game, animationPending: false });
+    await writeGame(
+      client,
+      game,
+      settleTurnClock({ ...game, animationPending: false }, Date.now()),
+    );
     return true;
   });
   if (changed) updates.emit(auth.campaignId);

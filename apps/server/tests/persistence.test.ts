@@ -491,6 +491,35 @@ it("conserva equipo anterior al cargar ranuras nuevas", async () => {
   });
 });
 beforeAll(migrate);
+it("conserva el modo online al guardar y recuperar, y lee guardados previos como locales", async () => {
+  const online = await api.createCampaign({ mode: "ONLINE" });
+  campaigns.push(online.session.campaignId);
+  const game = await api.readGame(online.session.campaignId);
+  expect(game.mode).toBe("ONLINE");
+  expect(
+    api.projectView(
+      game,
+      await api.authenticate(online.session.token),
+      [],
+      null,
+    ).mode,
+  ).toBe("ONLINE");
+  await api.recoverCampaign(online.recoveryCode);
+  expect((await api.readGame(game.id)).mode).toBe("ONLINE");
+
+  const local = await api.createCampaign();
+  campaigns.push(local.session.campaignId);
+  const old = JSON.parse(
+    JSON.stringify(await api.readGame(local.session.campaignId)),
+  );
+  delete old.mode;
+  expect(validateSave(old).mode).toBe("LOCAL");
+  expect((await api.readGame(local.session.campaignId)).mode).toBe("LOCAL");
+  await expect(api.createCampaign({ mode: "REMOTE" })).rejects.toThrow();
+  await expect(
+    api.createCampaign({ mode: "ONLINE", extra: true }),
+  ).rejects.toThrow();
+});
 afterAll(async () => {
   for (const table of [
     "campaign_save_backups",
@@ -750,7 +779,7 @@ describe("PostgreSQL real: integridad y recuperación", () => {
     expect(results.filter((r) => r.status === "rejected")).toHaveLength(1);
     expect((await api.readGame(f.host.session.campaignId)).revision).toBe(4);
   });
-  it("rechaza suplantación, pantalla compartida actuando y turno sin conexión", async () => {
+  it("rechaza suplantación y pantalla compartida, pero permite actuar al jugador activo con el resto desconectado", async () => {
     const f = await setup();
     await expect(
       api.execute(f.two.token, command(3, "ROLL_MOVEMENT"), f.online),
@@ -758,10 +787,8 @@ describe("PostgreSQL real: integridad y recuperación", () => {
     await expect(
       api.execute(f.host.session.token, command(3, "ROLL_MOVEMENT"), f.online),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await expect(
-      api.execute(f.one.token, command(3, "ROLL_MOVEMENT"), []),
-    ).rejects.toMatchObject({ code: "PLAYER_OFFLINE" });
-    expect((await api.readGame(f.host.session.campaignId)).revision).toBe(3);
+    await api.execute(f.one.token, command(3, "ROLL_MOVEMENT"), []);
+    expect((await api.readGame(f.host.session.campaignId)).revision).toBe(4);
   });
   it("recupera la campaña y el personaje sin alterar ítems ni repetir tiradas", async () => {
     const f = await setup();
@@ -957,7 +984,7 @@ it("recupera posiciones con coordenadas negativas del mapa ampliado", async () =
   expect(recovered.revision).toBe(game.revision);
 });
 
-it("espera el GIF y la confirmación autorizada de la mesa antes de avanzar", async () => {
+it("espera el GIF y acepta la confirmación autorizada de la mesa", async () => {
   const f = await setup();
   const g = await api.readGame(f.host.session.campaignId);
   g.players[0].x = 3;
@@ -991,7 +1018,7 @@ it("espera el GIF y la confirmación autorizada de la mesa antes de avanzar", as
     .mockReturnValue(after.animationUntil! + 1);
   try {
     await expect(api.execute(f.one.token, end, f.online)).rejects.toMatchObject(
-      { code: "ANIMATION_PLAYING" },
+      { code: "ATTACK_PENDING" },
     );
     await api.finishAnimation(f.host.session.token, after.revision);
     await api.finishAnimation(f.host.session.token, after.revision);
@@ -1093,4 +1120,227 @@ it("conserva la espera si falla guardar el fin visual y permite reintentar", asy
   expect(after.revision).toBe(g.revision);
   expect(after.events).toEqual(g.events);
   expect(after.players).toEqual(g.players);
+});
+
+it("vence el turno desconectado y conserva el recibo previo", async () => {
+  const f = await setup();
+  const start = await api.readGame(f.host.session.campaignId);
+  const prior = command(start.revision, "FINISH_MOVEMENT");
+  const receipt = await api.execute(f.one.token, prior, []);
+  const before = await api.readGame(start.id);
+  const clock = vi
+    .spyOn(Date, "now")
+    .mockReturnValue(before.turnDeadlineAt! + 1);
+  try {
+    const late = command(before.revision, "END_TURN");
+    await expect(api.execute(f.one.token, late, [])).rejects.toMatchObject({
+      code: "TURN_EXPIRED",
+    });
+    const after = await api.readGame(start.id);
+    expect(after.activePlayerId).toBe(f.two.playerId);
+    expect(after.revision).toBe(before.revision + 1);
+    expect(after.turnDeadlineAt).toBe(before.turnDeadlineAt! + 20_001);
+    expect(await api.execute(f.one.token, prior, [])).toEqual(receipt);
+    await api.tickTurn(start.id);
+    expect(await api.readGame(start.id)).toEqual(after);
+    const system = await pool.query(
+      "SELECT result FROM command_receipts WHERE campaign_id=$1 AND actor_id='SYSTEM'",
+      [start.id],
+    );
+    expect(system.rowCount).toBe(1);
+    const { receiptSchema } = await import("@umbral/protocol");
+    expect(receiptSchema.safeParse(system.rows[0].result).success).toBe(true);
+  } finally {
+    clock.mockRestore();
+  }
+});
+
+it("pausa los segundos útiles durante la animación y reanuda sin confirmación de mesa", async () => {
+  const f = await setup();
+  const start = await api.readGame(f.host.session.campaignId);
+  await api.execute(
+    f.one.token,
+    command(start.revision, "ROLL_MOVEMENT"),
+    f.online,
+  );
+  const rolled = await api.readGame(start.id);
+  expect(rolled.turnDeadlineAt).toBeNull();
+  expect(rolled.turnRemainingMs).toBeGreaterThan(0);
+  const clock = vi
+    .spyOn(Date, "now")
+    .mockReturnValue(rolled.animationUntil! - 1);
+  try {
+    await api.tickTurn(start.id);
+    expect((await api.readGame(start.id)).turnDeadlineAt).toBeNull();
+    clock.mockReturnValue(rolled.animationUntil! + 1);
+    await api.tickTurn(start.id);
+    const resumed = await api.readGame(start.id);
+    expect(resumed.animationPending).toBe(false);
+    expect(resumed.turnDeadlineAt).toBe(
+      rolled.animationUntil! + 1 + rolled.turnRemainingMs!,
+    );
+    expect(resumed.revision).toBe(rolled.revision);
+    await api.finishAnimation(f.host.session.token, resumed.revision);
+    expect(await api.readGame(start.id)).toEqual(resumed);
+  } finally {
+    clock.mockRestore();
+  }
+});
+
+it("resuelve una única tirada D6 pendiente al vencer y después pasa el turno", async () => {
+  const f = await setup();
+  const game = await api.readGame(f.host.session.campaignId);
+  game.pendingAttack = {
+    actorId: f.one.playerId!,
+    targetId: "sentinel",
+    ability: "basic",
+    d20: 12,
+  };
+  game.phase = "ACTION";
+  game.actionUsed = true;
+  game.turnDeadlineAt = Date.now() + 100;
+  await pool.query("UPDATE campaigns SET snapshot=$1 WHERE id=$2", [
+    JSON.stringify(game),
+    game.id,
+  ]);
+  const clock = vi.spyOn(Date, "now").mockReturnValue(game.turnDeadlineAt + 1);
+  try {
+    await api.tickTurn(game.id);
+    const damaged = await api.readGame(game.id);
+    expect(damaged.pendingAttack).toBeNull();
+    expect(damaged.activePlayerId).toBe(f.one.playerId);
+    expect(damaged.turnRemainingMs).toBe(0);
+    expect(damaged.turnDeadlineAt).toBeNull();
+    expect(
+      damaged.events.filter((event) => event.kind === "ATTACK_D6"),
+    ).toHaveLength(1);
+    await api.tickTurn(game.id);
+    expect(await api.readGame(game.id)).toEqual(damaged);
+    clock.mockReturnValue(damaged.animationUntil! + 1);
+    await api.tickTurn(game.id);
+    const next = await api.readGame(game.id);
+    expect(next.activePlayerId).toBe(f.two.playerId);
+    expect(
+      next.events.filter((event) => event.kind === "ATTACK_D6"),
+    ).toHaveLength(1);
+    const system = await pool.query(
+      "SELECT 1 FROM command_receipts WHERE campaign_id=$1 AND actor_id='SYSTEM'",
+      [game.id],
+    );
+    expect(system.rowCount).toBe(2);
+  } finally {
+    clock.mockRestore();
+  }
+});
+
+it("un fallo al guardar el vencimiento conserva el turno y permite reintentar", async () => {
+  const f = await setup();
+  const before = await api.readGame(f.host.session.campaignId);
+  const clock = vi
+    .spyOn(Date, "now")
+    .mockReturnValue(before.turnDeadlineAt! + 1);
+  await pool.query(
+    "CREATE FUNCTION fail_turn_timeout() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.id='" +
+      before.id +
+      "'::uuid THEN RAISE EXCEPTION 'turn timeout save failure'; END IF; RETURN NEW; END $$",
+  );
+  await pool.query(
+    "CREATE TRIGGER fail_turn_timeout BEFORE UPDATE ON campaigns FOR EACH ROW EXECUTE FUNCTION fail_turn_timeout()",
+  );
+  try {
+    await expect(api.tickTurn(before.id)).rejects.toThrow(
+      "turn timeout save failure",
+    );
+    expect(await api.readGame(before.id)).toEqual(before);
+    const receipts = await pool.query(
+      "SELECT 1 FROM command_receipts WHERE campaign_id=$1 AND actor_id='SYSTEM'",
+      [before.id],
+    );
+    expect(receipts.rowCount).toBe(0);
+  } finally {
+    await pool.query("DROP TRIGGER fail_turn_timeout ON campaigns");
+    await pool.query("DROP FUNCTION fail_turn_timeout()");
+  }
+  try {
+    await api.tickTurn(before.id);
+    expect((await api.readGame(before.id)).activePlayerId).toBe(f.two.playerId);
+  } finally {
+    clock.mockRestore();
+  }
+});
+
+it("serializa un comando tardío y dos despertares del reloj", async () => {
+  const f = await setup();
+  const before = await api.readGame(f.host.session.campaignId);
+  const clock = vi
+    .spyOn(Date, "now")
+    .mockReturnValue(before.turnDeadlineAt! + 1);
+  try {
+    const results = await Promise.allSettled([
+      api.tickTurn(before.id),
+      api.tickTurn(before.id),
+      api.execute(f.one.token, command(before.revision, "END_TURN"), []),
+    ]);
+    expect(
+      results.filter((result) => result.status === "rejected"),
+    ).toHaveLength(1);
+    const after = await api.readGame(before.id);
+    expect(after.activePlayerId).toBe(f.two.playerId);
+    expect(after.revision).toBe(before.revision + 1);
+    const receipts = await pool.query(
+      "SELECT 1 FROM command_receipts WHERE campaign_id=$1 AND actor_id='SYSTEM'",
+      [before.id],
+    );
+    expect(receipts.rowCount).toBe(1);
+  } finally {
+    clock.mockRestore();
+  }
+});
+
+it("inicializa una sola vez el reloj de una campaña guardada sin temporizador", async () => {
+  const f = await setup();
+  const old = await api.readGame(f.host.session.campaignId);
+  delete old.turnDeadlineAt;
+  delete old.turnRemainingMs;
+  await pool.query("UPDATE campaigns SET snapshot=$1 WHERE id=$2", [
+    JSON.stringify(old),
+    old.id,
+  ]);
+  const now = Date.now();
+  const clock = vi.spyOn(Date, "now").mockReturnValue(now);
+  try {
+    await api.tickTurn(old.id);
+    const initialized = await api.readGame(old.id);
+    expect(initialized.revision).toBe(old.revision);
+    expect(initialized.turnRemainingMs).toBe(20_000);
+    expect(initialized.turnDeadlineAt).toBe(now + 20_000);
+    await api.tickTurn(old.id);
+    expect(await api.readGame(old.id)).toEqual(initialized);
+  } finally {
+    clock.mockRestore();
+  }
+});
+
+it("el vencimiento del último jugador cierra la ronda y reinicia los 20 segundos", async () => {
+  const f = await setup();
+  const game = await api.readGame(f.host.session.campaignId);
+  game.activePlayerId = f.two.playerId!;
+  game.enemies = [];
+  game.turnDeadlineAt = Date.now() + 100;
+  await pool.query("UPDATE campaigns SET snapshot=$1 WHERE id=$2", [
+    JSON.stringify(game),
+    game.id,
+  ]);
+  const now = game.turnDeadlineAt + 1;
+  const clock = vi.spyOn(Date, "now").mockReturnValue(now);
+  try {
+    await api.tickTurn(game.id);
+    const next = await api.readGame(game.id);
+    expect(next.round).toBe(game.round + 1);
+    expect(next.activePlayerId).toBe(f.one.playerId);
+    expect(next.turnRemainingMs).toBe(20_000);
+    expect(next.turnDeadlineAt).toBe(now + 20_000);
+  } finally {
+    clock.mockRestore();
+  }
 });

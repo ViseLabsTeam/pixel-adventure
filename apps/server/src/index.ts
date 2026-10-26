@@ -23,8 +23,9 @@ import {
 } from "./application/campaigns.js";
 import { pool } from "./persistence/database.js";
 import { migrate } from "./persistence/migrate.js";
+import { allowedOrigins, originAllowed } from "./origin-policy.js";
 const port = Number(process.env.PORT ?? 2567);
-const allowed = (process.env.APP_ORIGINS ?? "").split(",").filter(Boolean);
+const allowed = allowedOrigins(process.env.APP_ORIGINS ?? "");
 const roomLocks = new Map<string, Promise<string>>();
 async function ensureRoom(campaignId: string) {
   const existing = activeRooms.get(campaignId);
@@ -46,7 +47,7 @@ const requests = new Map<string, { at: number; count: number }>();
 app.use((req, res, next) => {
   const origin = req.headers.origin,
     host = req.headers["x-forwarded-host"] ?? req.headers.host;
-  if (origin && new URL(origin).host !== host && !allowed.includes(origin)) {
+  if (!originAllowed(origin, host, allowed)) {
     res.status(403).json({ message: "Origen no permitido." });
     return;
   }
@@ -82,8 +83,8 @@ app.get("/health/ready", async (_req, res) => {
     res.status(503).json({ ok: false });
   }
 });
-app.post("/api/campaigns", async (_req, res) =>
-  res.json(await createCampaign()),
+app.post("/api/campaigns", async (req, res) =>
+  res.json(await createCampaign(req.body)),
 );
 app.post("/api/join", async (req, res) =>
   res.json(await joinCampaign(req.body)),
@@ -157,10 +158,11 @@ const server = new Server({
     pingInterval: 3000,
     pingMaxRetries: 2,
     verifyClient: ({ origin, req }: { origin: string; req: IncomingMessage }) =>
-      !origin ||
-      new URL(origin).host ===
-        (req.headers["x-forwarded-host"] ?? req.headers.host) ||
-      allowed.includes(origin),
+      originAllowed(
+        origin,
+        req.headers["x-forwarded-host"] ?? req.headers.host,
+        allowed,
+      ),
   }),
   express: (transportApp) => {
     transportApp.use(app);
@@ -173,4 +175,9 @@ server.onShutdown(async () => {
   await pool.end();
 });
 await server.listen(port, "0.0.0.0");
+const activeCampaigns = await pool.query(
+  "SELECT id FROM campaigns WHERE snapshot->>'status'='ACTIVE'",
+);
+for (const campaign of activeCampaigns.rows)
+  await ensureRoom(campaign.id as string);
 console.log(`Umbral server ready on :${port}`);

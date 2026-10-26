@@ -10,6 +10,7 @@ import {
   Crosshair,
   Smartphone,
   Monitor,
+  Globe2,
   ChevronLeft,
 } from "lucide-react";
 import { classes, type ClassId } from "@umbral/content";
@@ -196,6 +197,16 @@ export function Home({
               <Plus size={18} />
               {busy ? "Preparando la mesa…" : "Crear una partida"}
               <ArrowRight size={18} />
+            </button>
+            <button
+              className="button"
+              disabled={busy}
+              onClick={() =>
+                void run(() => api("campaigns", { mode: "ONLINE" }))
+              }
+            >
+              <Globe2 size={18} />
+              Crear partida online
             </button>
             <button
               className="button"

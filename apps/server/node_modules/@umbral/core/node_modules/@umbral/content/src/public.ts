@@ -74,6 +74,7 @@ export const abilities = {
 
 export { animationTimings, movementStepMs } from "./animation-timings";
 export { diceTimings } from "./dice-timings";
+export { courtyardSpawns } from "./courtyard-placements";
 export const animationGraceMs = 300;
 export const combatPresentation = {
   resultMs: 650,

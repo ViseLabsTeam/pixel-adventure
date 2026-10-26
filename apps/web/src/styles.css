@@ -1055,6 +1055,13 @@ footer {
 .board-status i {
   margin-right: 7px;
 }
+.turn-countdown {
+  color: #f5d88c;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  white-space: nowrap;
+}
 .game-canvas {
   width: 100%;
   aspect-ratio: 1;
@@ -3737,5 +3744,311 @@ footer {
   .die-button-label,
   .attack-die span {
     font-size: 8px;
+  }
+}
+
+/* The shared table keeps the entire viewport available to the board. */
+.table-mode {
+  height: 100dvh;
+  overflow: hidden;
+}
+.table-mode .table-view {
+  --table-hud-height: 104px;
+  position: fixed;
+  inset: 0;
+  display: block;
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+.table-mode .board-panel {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  overflow: hidden;
+}
+.table-mode .game-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  aspect-ratio: auto;
+}
+.table-hud {
+  position: absolute;
+  z-index: 10;
+  inset: 0 0 auto;
+  height: var(--table-hud-height);
+  display: flex;
+  align-items: stretch;
+  gap: 9px;
+  padding: 9px 12px 13px;
+  background: linear-gradient(#0b160fe8 45%, #0b160fba 82%, #0b160f00);
+}
+.table-turn-summary {
+  flex: 0 0 clamp(160px, 15vw, 210px);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 5px 10px;
+  border: 1px solid #78937170;
+  border-radius: 6px;
+  background: #101b16bd;
+  box-shadow: 0 4px 15px #0005;
+}
+.table-round {
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: #bdc7aa;
+}
+.table-turn-summary strong {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: #f1ebcc;
+}
+.table-turn-summary .turn-countdown {
+  font-size: 22px;
+  line-height: 1;
+  margin: 2px 0;
+}
+.table-movement {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 9px;
+  color: #d3e0bd;
+}
+.table-mode .table-hud .party-bar {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 7px;
+  margin: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.table-mode .table-hud .party-bar article {
+  flex: 1 1 0;
+  min-width: 88px;
+  min-height: 0;
+  padding: 5px 8px;
+  gap: 7px;
+  border-radius: 6px;
+  background: #17251dd6;
+  box-shadow: 0 4px 15px #0005;
+}
+.table-mode .table-hud .party-bar article.active {
+  background: #2b3022df;
+}
+.table-mode .table-hud .party-bar img {
+  width: 40px;
+  height: 68px;
+  flex: none;
+}
+.table-player-details {
+  flex: 1;
+  min-width: 0;
+}
+.table-player-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px;
+  min-width: 0;
+}
+.table-player-heading h2 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
+.table-player-heading span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 8px;
+  color: #d3c78e;
+}
+.table-hud .party-bar article:not(.active) .table-player-heading span {
+  color: #b8c3a8;
+}
+.table-hud .party-bar .health-track {
+  height: 5px;
+  margin-top: 4px;
+}
+.table-hud .party-bar small {
+  font-size: 8px;
+  margin-top: 2px;
+}
+.table-hud .party-bar .resource-bar.compact {
+  margin-top: 3px;
+}
+.table-menu-toggle {
+  flex: none;
+  align-self: center;
+  background: #17251de0;
+  border-color: #667957;
+}
+.table-chronicle {
+  position: absolute;
+  z-index: 6;
+  left: 18px;
+  bottom: 16px;
+  width: min(430px, calc(100vw - 36px));
+  padding: 30px 14px 10px;
+  pointer-events: none;
+  background: linear-gradient(transparent, #0b160f55 45%, #0b160f90);
+  text-shadow: 0 1px 3px #061009;
+}
+.table-chronicle > .eyebrow {
+  margin-bottom: 5px;
+  color: #e0cf9bd9;
+}
+.table-chronicle .event-log {
+  display: flex;
+  flex-direction: column;
+  max-height: none;
+  overflow: hidden;
+  gap: 4px;
+}
+.table-chronicle .event-log li {
+  border: 0;
+  padding: 2px 0;
+  gap: 8px;
+}
+.table-chronicle .event-log li > span {
+  color: #e8d190c9;
+}
+.table-chronicle .event-log p {
+  color: #ecf1ddca;
+  font-size: 13px;
+  line-height: 1.25;
+}
+.table-chronicle .event-log small {
+  color: #e5ce8eca;
+  font-size: 10px;
+  margin-top: 2px;
+}
+.table-mode .table-dice-spotlight {
+  top: calc(var(--table-hud-height) + 10px);
+}
+.table-mode .table-alert {
+  position: absolute;
+  z-index: 12;
+  top: calc(var(--table-hud-height) + 10px);
+  left: 12px;
+  max-width: min(400px, calc(100vw - 24px));
+  box-shadow: 0 8px 25px #0009;
+}
+.table-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 29;
+  width: 100%;
+  border: 0;
+  background: #07100b70;
+}
+.table-menu {
+  position: absolute;
+  z-index: 30;
+  top: var(--table-hud-height);
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(340px, calc(100vw - 24px));
+  max-height: calc(100dvh - var(--table-hud-height) - 12px);
+  overflow-y: auto;
+  padding: 18px;
+  border: 1px solid #718162;
+  border-radius: 7px;
+  background: #132018f5;
+  box-shadow: 0 14px 35px #000b;
+}
+.table-menu h2 {
+  font-size: 23px;
+}
+.table-menu .table-code {
+  justify-content: space-between;
+}
+.table-menu .recovery-panel {
+  margin: 0;
+}
+.table-menu-meta {
+  display: grid;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-size: 10px;
+  color: #bec8b4;
+}
+@media (max-width: 950px) {
+  .table-mode .table-view {
+    --table-hud-height: 88px;
+  }
+  .table-hud {
+    gap: 5px;
+    padding: 6px 8px 11px;
+  }
+  .table-turn-summary {
+    flex-basis: 138px;
+    padding: 5px;
+  }
+  .table-turn-summary strong {
+    font-size: 10px;
+  }
+  .table-turn-summary .turn-countdown {
+    font-size: 18px;
+  }
+  .table-movement {
+    font-size: 8px;
+  }
+  .table-mode .table-hud .party-bar {
+    gap: 4px;
+  }
+  .table-mode .table-hud .party-bar article {
+    padding: 4px;
+  }
+  .table-mode .table-hud .party-bar img {
+    display: none;
+  }
+  .table-player-heading {
+    display: block;
+  }
+  .table-player-heading h2 {
+    font-size: 11px;
+  }
+  .table-player-heading span {
+    display: block;
+    font-size: 7px;
+  }
+  .table-menu-toggle {
+    width: 34px;
+    height: 34px;
+  }
+  .table-chronicle {
+    left: 6px;
+    bottom: 5px;
+    width: min(370px, calc(100vw - 12px));
   }
 }

@@ -9,6 +9,7 @@ Este documento consolida las decisiones de la conversación. Las reglas marcadas
 - Juego web cooperativo para entre dos y cuatro jugadores.
 - Diseñado principalmente para jugar presencialmente, todos en la misma habitación, con Internet.
 - Una notebook conectada al televisor muestra el tablero, personajes, enemigos, barras de vida y fases de la partida.
+- Al iniciar el encuentro, la cámara de la pantalla compartida se centra en los jugadores presentes en sus apariciones. Añade tres casillas visibles por eje al encuadre efectivo anterior y conserva el seguimiento durante la exploración.
 - Cada celular presenta una tarjeta de personaje con estadísticas, ataques, dados habilitados cuando corresponde por turno, flechas e inventario. El personaje se desplaza solo en la pantalla compartida.
 - La salud aparece con una barra en el celular y junto al retrato del personaje en la pantalla compartida.
 - La demo debe incluir inicio, lobby, configuración y entrada a partida; las cifras actuales son valores de prueba.
@@ -32,6 +33,8 @@ El turno de un jugador tiene dos fases consecutivas:
 2. Una sola acción: ataque, habilidad o consumo de un ítem.
 
 Después de realizar la acción no se puede volver a mover durante ese turno. Una habilidad utilizada consume su uso o recurso aunque falle el impacto.
+
+Cada jugador dispone de 20 segundos útiles para su turno. La cuenta se pausa durante las animaciones y continúa aunque se desconecte su control. Solo la pantalla compartida muestra la cuenta atrás. Al agotarse, el servidor cierra el turno y avanza al siguiente jugador que corresponda en el orden de la ronda, o a los enemigos si era el último. Si el D20 de un ataque ya acertó y falta su D6, el servidor realiza ese D6 una sola vez, completa el ataque y luego avanza el turno.
 
 ### Interpretación operativa propuesta
 

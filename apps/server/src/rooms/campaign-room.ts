@@ -4,6 +4,7 @@ import {
   authenticate,
   finishAnimation,
   execute,
+  tickTurn,
   readGame,
   projectView,
   updates,
@@ -20,6 +21,12 @@ export class CampaignRoom extends Room {
   storageError = false;
   private credentials = new Map<string, string>();
   private refreshChain = Promise.resolve();
+  private refreshRequested = false;
+  private messageCounts = new Map<string, { since: number; count: number }>();
+  private lastSync = new Map<string, number>();
+  private turnTimer?: ReturnType<typeof setTimeout>;
+  private retryTurnAt = 0;
+  private closing = false;
   private changed = () => {
     void this.refresh();
   };
@@ -33,8 +40,15 @@ export class CampaignRoom extends Room {
       throw new Error("Campaign already has a room");
     activeRooms.set(this.campaignId, this.roomId);
     updates.on(this.campaignId, this.changed);
-    this.onMessage("sync", () => this.refresh());
+    this.onMessage("sync", (client) => {
+      if (!this.allowMessage(client.sessionId)) return;
+      const now = Date.now();
+      if (now - (this.lastSync.get(client.sessionId) ?? 0) < 500) return;
+      this.lastSync.set(client.sessionId, now);
+      void this.refresh();
+    });
     this.onMessage("animation-complete", async (client, revision: unknown) => {
+      if (!this.allowMessage(client.sessionId)) return;
       if (
         typeof revision !== "number" ||
         !Number.isSafeInteger(revision) ||
@@ -55,6 +69,7 @@ export class CampaignRoom extends Room {
       }
     });
     this.onMessage("select", async (client, payload: unknown) => {
+      if (!this.allowMessage(client.sessionId)) return;
       try {
         const auth = await authenticate(
           this.credentials.get(client.sessionId) ?? "",
@@ -74,6 +89,17 @@ export class CampaignRoom extends Room {
       }
     });
     this.onMessage("command", async (client, input: unknown) => {
+      if (!this.allowMessage(client.sessionId)) {
+        client.send("failure", {
+          commandId:
+            typeof input === "object" && input
+              ? Reflect.get(input, "commandId")
+              : null,
+          code: "RATE_LIMITED",
+          message: "Demasiados mensajes. Esperá un momento y reintentá.",
+        });
+        return;
+      }
       try {
         const receipt = await execute(
           this.credentials.get(client.sessionId)!,
@@ -113,6 +139,7 @@ export class CampaignRoom extends Room {
         await this.refresh();
       }
     });
+    void this.refresh();
   }
   async onAuth(_client: Client, options: { token?: string }) {
     const auth = await authenticate(options.token ?? "");
@@ -135,9 +162,13 @@ export class CampaignRoom extends Room {
   }
   onLeave(client: Client) {
     this.credentials.delete(client.sessionId);
+    this.messageCounts.delete(client.sessionId);
+    this.lastSync.delete(client.sessionId);
     void this.refresh();
   }
   onDispose() {
+    this.closing = true;
+    clearTimeout(this.turnTimer);
     updates.off(this.campaignId, this.changed);
     if (activeRooms.get(this.campaignId) === this.roomId)
       activeRooms.delete(this.campaignId);
@@ -152,13 +183,27 @@ export class CampaignRoom extends Room {
       ),
     ];
   }
+  private allowMessage(sessionId: string) {
+    const now = Date.now();
+    let record = this.messageCounts.get(sessionId);
+    if (!record || now - record.since >= 10_000) {
+      record = { since: now, count: 0 };
+      this.messageCounts.set(sessionId, record);
+    }
+    return ++record.count <= 50;
+  }
   refresh() {
+    if (this.closing) return this.refreshChain;
+    if (this.refreshRequested) return this.refreshChain;
+    this.refreshRequested = true;
     this.refreshChain = this.refreshChain
       .catch(() => undefined)
       .then(async () => {
+        this.refreshRequested = false;
         try {
           const game = await readGame(this.campaignId);
           this.storageError = false;
+          this.scheduleTurn(game);
           for (const client of this.clients) {
             try {
               const auth = await authenticate(
@@ -181,6 +226,10 @@ export class CampaignRoom extends Room {
           }
         } catch {
           this.storageError = true;
+          if (!this.closing) {
+            clearTimeout(this.turnTimer);
+            this.turnTimer = setTimeout(() => void this.refresh(), 1000);
+          }
           for (const client of this.clients)
             client.send("storage-error", {
               message:
@@ -189,5 +238,33 @@ export class CampaignRoom extends Room {
         }
       });
     return this.refreshChain;
+  }
+  private scheduleTurn(game: Awaited<ReturnType<typeof readGame>>) {
+    clearTimeout(this.turnTimer);
+    if (this.closing || game.status !== "ACTIVE") return;
+    const due =
+      game.turnDeadlineAt === undefined
+        ? Date.now()
+        : game.turnDeadlineAt === null
+          ? (game.animationUntil ?? Date.now())
+          : game.turnDeadlineAt;
+    this.turnTimer = setTimeout(
+      () => {
+        void tickTurn(this.campaignId)
+          .then(() => {
+            this.retryTurnAt = 0;
+            return this.refresh();
+          })
+          .catch((error: unknown) => {
+            this.retryTurnAt = Date.now() + 1000;
+            console.error(
+              "turn_timer_storage_error",
+              error instanceof Error ? error.message : "unknown",
+            );
+            void this.refresh();
+          });
+      },
+      Math.max(0, Math.max(due, this.retryTurnAt) - Date.now()),
+    );
   }
 }

@@ -5,15 +5,31 @@ import {
   animationTimings,
   classes,
   combatPresentation,
+  courtyardSpawns,
   diceTimings,
   movementStepMs,
 } from "@umbral/content";
 import type { GameView } from "@umbral/protocol";
 import type { Preferences } from "../ui/shared";
 import { facingOriginX } from "./sprite-facing";
+import { impactKnockback, isDamagingImpact } from "./impact-knockback";
+import {
+  BOARD_OFFSET as OFFSET,
+  TILE_SIZE as TILE,
+  cameraScrollRange,
+  centeredScroll,
+  followScroll,
+  initialFocusTile,
+  scrollToWorldOrigin,
+  tileCenter,
+  worldOriginToScroll,
+  worldViewport,
+  zoomForExtraTiles,
+} from "./camera-geometry";
 import treeLayers from "../../../../assets/mapas/generated/trees.json";
 const actorArt = { ...actorRecipes.players, ...actorRecipes.enemies };
 type ActorArtId = keyof typeof actorArt;
+type ImpactVisual = Phaser.GameObjects.Sprite | Phaser.GameObjects.Container;
 type Clip = {
   duration: number;
   delays: number[];
@@ -22,8 +38,6 @@ type Clip = {
   originY: number;
   scale: number;
 };
-const TILE = 70,
-  OFFSET = 30;
 const ART_VERSION = "passive-20261019";
 class Courtyard extends Phaser.Scene {
   snapshot: GameView;
@@ -34,11 +48,26 @@ class Courtyard extends Phaser.Scene {
   decor?: Phaser.GameObjects.Container;
   private gridSignature = "";
   private scenerySignature = "";
+  private initialCameraCenter: { x: number; y: number };
+  private cameraStateSignature = "";
   ready = false;
   positions = new Map<string, { x: number; y: number }>();
   displayedHp = new Map<string, number>();
   displayedMaxHp = new Map<string, number>();
   pendingImpacts = new Map<string, number>();
+  private impactVisuals = new Map<
+    string,
+    {
+      visual: ImpactVisual;
+      baseX: number;
+      baseY: number;
+      offset: { x: number; y: number };
+      timer: Phaser.Time.TimerEvent;
+      knockbackTween?: Phaser.Tweens.Tween;
+      returnTween?: Phaser.Tweens.Tween;
+      restoreColor: () => void;
+    }
+  >();
   seen = new Set<string>();
   initialized = false;
   visualJobs = new Set<() => void>();
@@ -71,46 +100,192 @@ class Courtyard extends Phaser.Scene {
         .setFlipX(facingLeft)
         .setOrigin(facingOriginX(sourceOriginX, facingLeft), sprite.originY);
     }
-    const marker = actor.getByName("facing") as Phaser.GameObjects.Text | null;
+    const marker = (actor.getByName("facing") ??
+      (
+        actor.getByName("impact-visual") as Phaser.GameObjects.Container | null
+      )?.getByName("facing")) as Phaser.GameObjects.Text | null;
     marker?.setText(targetX < fromX ? "◀" : "▶");
+  }
+  private syncImpactMarker() {
+    const host = this.game.canvas.parentElement;
+    if (!host) return;
+    const first = this.impactVisuals.entries().next().value;
+    if (!first) {
+      delete host.dataset.impactTargetId;
+      delete host.dataset.impactOffsetX;
+      delete host.dataset.impactOffsetY;
+      return;
+    }
+    const [id, impact] = first;
+    host.dataset.impactTargetId = id;
+    host.dataset.impactOffsetX = String(impact.offset.x);
+    host.dataset.impactOffsetY = String(impact.offset.y);
+  }
+  private clearImpactVisual(id: string) {
+    const impact = this.impactVisuals.get(id);
+    if (!impact) return;
+    impact.timer.remove();
+    impact.knockbackTween?.stop();
+    impact.returnTween?.stop();
+    impact.visual.setPosition(impact.baseX, impact.baseY);
+    impact.restoreColor();
+    this.impactVisuals.delete(id);
+    this.syncImpactMarker();
+  }
+  private showHitReaction(
+    event: GameView["events"][number],
+    target: Phaser.GameObjects.Container,
+    entityId: string,
+    attacker: { x: number; y: number },
+    defender: { x: number; y: number },
+  ) {
+    if (!isDamagingImpact(event, this.preferences.reducedMotion)) return;
+    this.clearImpactVisual(entityId);
+    const sprite = target.getByName(
+      "sprite",
+    ) as Phaser.GameObjects.Sprite | null;
+    const fallback = target.getByName(
+      "impact-visual",
+    ) as Phaser.GameObjects.Container | null;
+    const visual: ImpactVisual | null = sprite ?? fallback;
+    if (!visual) return;
+    const baseX = visual.x;
+    const baseY = visual.y;
+    const offset = impactKnockback(attacker, defender);
+    let restoreColor: () => void;
+    if (sprite) {
+      sprite.setTint(0xff0000).setTintMode(Phaser.TintModes.FILL);
+      restoreColor = () => sprite.clearTint();
+    } else {
+      const body = fallback?.getByName(
+        "fallback-body",
+      ) as Phaser.GameObjects.Arc | null;
+      const symbol = fallback?.getByName(
+        "fallback-symbol",
+      ) as Phaser.GameObjects.Text | null;
+      const marker = fallback?.getByName(
+        "facing",
+      ) as Phaser.GameObjects.Text | null;
+      body?.setFillStyle(0xff0000).setStrokeStyle(2, 0xff0000);
+      symbol?.setColor("#ff0000");
+      marker?.setColor("#ff0000");
+      restoreColor = () => {
+        body?.setFillStyle(0x943e43).setStrokeStyle(2, 0xe9a49a);
+        symbol?.setColor("#ffe3ca");
+        marker?.setColor("#ffe3ca");
+      };
+    }
+    const timer = this.time.delayedCall(1000, () =>
+      this.clearImpactVisual(entityId),
+    );
+    this.impactVisuals.set(entityId, {
+      visual,
+      baseX,
+      baseY,
+      offset,
+      timer,
+      restoreColor,
+    });
+    this.syncImpactMarker();
+    const impact = this.impactVisuals.get(entityId)!;
+    impact.knockbackTween = this.tweens.add({
+      targets: visual,
+      x: baseX + offset.x,
+      y: baseY + offset.y,
+      duration: 120,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        if (this.impactVisuals.get(entityId) !== impact) return;
+        impact.returnTween = this.tweens.add({
+          targets: visual,
+          x: baseX,
+          y: baseY,
+          duration: 240,
+          ease: "Sine.easeOut",
+        });
+      },
+    });
   }
   moveCamera(x: number, y: number, duration = 0) {
     const camera = this.cameras.main;
-    const { width, height } = camera;
-    const centerX = OFFSET + x * TILE + TILE / 2;
-    const centerY = OFFSET + y * TILE + TILE / 2;
-    const margin = Math.min(125, width / 4, height / 4);
-    const nextX = Phaser.Math.Clamp(
-      centerX < camera.scrollX + margin
-        ? centerX - margin
-        : centerX > camera.scrollX + width - margin
-          ? centerX - width + margin
-          : camera.scrollX,
-      OFFSET + this.snapshot.map.minX * TILE,
-      OFFSET +
-        (this.snapshot.map.minX + this.snapshot.map.width) * TILE -
-        width,
+    const viewport = worldViewport(camera, camera.zoom);
+    const range = cameraScrollRange(
+      this.snapshot.map,
+      viewport,
+      this.initialCameraCenter,
     );
-    const nextY = Phaser.Math.Clamp(
-      centerY < camera.scrollY + margin
-        ? centerY - margin
-        : centerY > camera.scrollY + height - margin
-          ? centerY - height + margin
-          : camera.scrollY,
-      OFFSET + this.snapshot.map.minY * TILE,
-      OFFSET +
-        (this.snapshot.map.minY + this.snapshot.map.height) * TILE -
-        height,
+    const nextOrigin = followScroll(
+      tileCenter({ x, y }),
+      scrollToWorldOrigin(
+        { x: camera.scrollX, y: camera.scrollY },
+        camera,
+        viewport,
+      ),
+      viewport,
+      camera.zoom,
+      range,
     );
+    const next = worldOriginToScroll(nextOrigin, camera, viewport);
     this.tweens.killTweensOf(camera);
     if (duration && !this.preferences.reducedMotion)
       this.tweens.add({
         targets: camera,
-        scrollX: nextX,
-        scrollY: nextY,
+        scrollX: next.x,
+        scrollY: next.y,
         duration,
       });
-    else camera.setScroll(nextX, nextY);
+    else camera.setScroll(next.x, next.y);
+  }
+  configureCamera(center = false) {
+    const camera = this.cameras.main;
+    if (!camera.width || !camera.height) return;
+    camera.setZoom(zoomForExtraTiles(camera));
+    const viewport = worldViewport(camera, camera.zoom);
+    const range = cameraScrollRange(
+      this.snapshot.map,
+      viewport,
+      this.initialCameraCenter,
+    );
+    camera.setBounds(
+      range.minX,
+      range.minY,
+      range.maxX - range.minX + viewport.width,
+      range.maxY - range.minY + viewport.height,
+    );
+    if (center) {
+      const scroll = worldOriginToScroll(
+        centeredScroll(this.initialCameraCenter, viewport),
+        camera,
+        viewport,
+      );
+      camera.setScroll(scroll.x, scroll.y);
+    }
+  }
+  update() {
+    if (!this.ready) return;
+    const camera = this.cameras.main;
+    const viewport = worldViewport(camera, camera.zoom);
+    const origin = scrollToWorldOrigin(
+      { x: camera.scrollX, y: camera.scrollY },
+      camera,
+      viewport,
+    );
+    const signature = [
+      camera.zoom,
+      origin.x,
+      origin.y,
+      viewport.width,
+      viewport.height,
+    ].join(":");
+    if (signature === this.cameraStateSignature) return;
+    this.cameraStateSignature = signature;
+    const host = this.game.canvas.parentElement;
+    if (!host) return;
+    host.dataset.cameraZoom = String(camera.zoom);
+    host.dataset.cameraLeft = String(origin.x);
+    host.dataset.cameraTop = String(origin.y);
+    host.dataset.cameraWorldWidth = String(viewport.width);
+    host.dataset.cameraWorldHeight = String(viewport.height);
   }
   drawHealth(
     actor: Phaser.GameObjects.Container,
@@ -138,6 +313,7 @@ class Courtyard extends Phaser.Scene {
     target: Phaser.GameObjects.Container,
     entity: GameView["players"][number] | GameView["enemies"][number],
     hp: number,
+    attacker: { x: number; y: number } | undefined,
   ) {
     const finishHealth = () => {
       this.displayedHp.set(entity.id, hp);
@@ -151,6 +327,8 @@ class Courtyard extends Phaser.Scene {
       finishHealth();
       return;
     }
+    if (attacker)
+      this.showHitReaction(event, target, entity.id, attacker, entity);
     const done = this.beginVisual();
     const fx = this.add
       .circle(
@@ -255,6 +433,13 @@ class Courtyard extends Phaser.Scene {
     super("courtyard");
     this.snapshot = snapshot;
     this.preferences = preferences;
+    const focus = initialFocusTile(
+      snapshot.players,
+      courtyardSpawns,
+      snapshot.activePlayerId,
+      snapshot.round,
+    );
+    this.initialCameraCenter = tileCenter(focus ?? { x: 0, y: 0 });
   }
   preload() {
     this.load.on("loaderror", () =>
@@ -282,6 +467,10 @@ class Courtyard extends Phaser.Scene {
     }
   }
   create() {
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      for (const id of [...this.impactVisuals.keys()])
+        this.clearImpactVisual(id);
+    });
     for (const id of Object.keys(actorArt) as ActorArtId[]) {
       const clips = this.cache.json.get(id + "-clips") as Record<string, Clip>;
       for (const [action, clip] of Object.entries(clips ?? {}))
@@ -321,12 +510,7 @@ class Courtyard extends Phaser.Scene {
     this.grid = this.add.graphics();
     this.highlights = this.add.graphics();
     this.decor = this.add.container(0, 0);
-    this.cameras.main.setBounds(
-      OFFSET + this.snapshot.map.minX * TILE,
-      OFFSET + this.snapshot.map.minY * TILE,
-      this.snapshot.map.width * TILE,
-      this.snapshot.map.height * TILE,
-    );
+    this.configureCamera(true);
     this.ready = true;
     this.paint(this.snapshot);
     this.report(
@@ -338,8 +522,11 @@ class Courtyard extends Phaser.Scene {
   paint(state: GameView) {
     this.snapshot = state;
     if (!this.ready) return;
-    if (this.preferences.reducedMotion)
+    if (this.preferences.reducedMotion) {
+      for (const id of [...this.impactVisuals.keys()])
+        this.clearImpactVisual(id);
       for (const done of this.visualJobs) done();
+    }
     const grid = this.grid!;
     const gridSignature = `${this.preferences.grid}:${state.map.minX}:${state.map.minY}:${state.map.width}:${state.map.height}`;
     if (gridSignature !== this.gridSignature) {
@@ -501,21 +688,26 @@ class Courtyard extends Phaser.Scene {
             entity.archetypeId as keyof typeof actorRecipes.enemies,
           );
         } else {
-          const body = this.add.graphics();
-          body.fillStyle(0x943e43).fillCircle(0, -5, 19);
-          body.lineStyle(2, 0xe9a49a).strokeCircle(0, -5, 19);
-          actor.add(body);
-          actor.add(
+          const visual = this.add.container(0, 0).setName("impact-visual");
+          visual.add(
+            this.add
+              .circle(0, -5, 19, 0x943e43)
+              .setStrokeStyle(2, 0xe9a49a)
+              .setName("fallback-body"),
+          );
+          visual.add(
             this.add
               .text(0, -5, "✦", { fontSize: "25px", color: "#ffe3ca" })
+              .setName("fallback-symbol")
               .setOrigin(0.5),
           );
-          actor.add(
+          visual.add(
             this.add
               .text(0, 12, "▶", { fontSize: "12px", color: "#ffe3ca" })
               .setName("facing")
               .setOrigin(0.5),
           );
+          actor.add(visual);
         }
         actor.add(
           this.add
@@ -709,7 +901,8 @@ class Courtyard extends Phaser.Scene {
           ? (enemyArtId as keyof typeof actorRecipes.enemies)
           : null);
       const startAttack = () => {
-        const show = () => this.showImpact(event, target, entity, afterHp);
+        const show = () =>
+          this.showImpact(event, target, entity, afterHp, from);
         const sprite = actor.getByName(
           "sprite",
         ) as Phaser.GameObjects.Sprite | null;
@@ -753,6 +946,7 @@ class Courtyard extends Phaser.Scene {
     this.finishPresentation();
     for (const [id, actor] of this.actors)
       if (!visible.has(id)) {
+        this.clearImpactVisual(id);
         actor.destroy();
         this.actors.delete(id);
         this.positions.delete(id);
@@ -808,6 +1002,7 @@ export default function GameBoard({
       const height = Math.round(entry.contentRect.height);
       if (width && height) {
         engine.scale.resize(width, height);
+        if (level.ready) level.configureCamera();
         const active = level.snapshot.players.find(
           (player) => player.id === level.snapshot.activePlayerId,
         );

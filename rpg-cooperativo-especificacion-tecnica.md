@@ -21,7 +21,7 @@ Requisitos que condicionan la arquitectura:
 - El movimiento precede a una sola acción. Una acción realizada cierra el movimiento; una habilidad fallida consume su uso.
 - El daño usa d20 como base y un d6 para multiplicadores 1, 1,25 o 1,50. El crítico por sigilo sustituye el d6 por el multiplicador 1,50.
 
-La primera entrega cubre la experiencia presencial con Internet. El juego remoto puede incorporar después una vista de tablero en el dispositivo de cada participante, reutilizando servidor, reglas y conexión.
+La demo permite crear campañas `LOCAL` (predeterminado) u `ONLINE`. En online, el anfitrión comparte la pantalla de la mesa por videollamada; cada participante usa su propio dispositivo como control a través de un origen HTTPS público que también transporta WSS. Ambos modos reutilizan servidor, reglas y conexión. Una vista de tablero propia en cada dispositivo sigue siendo una posibilidad futura, no parte de esta opción.
 
 ## 2. Stack de referencia
 
@@ -126,7 +126,7 @@ Separar el estado persistente, las vistas de red y la presentación local.
 | Grupo de datos | Campos necesarios |
 | --- | --- |
 | Partida | Identificador, estado, versiones de reglas/contenido/guardado, revisión y progreso. |
-| Turno | Ronda, fase, actor activo, orden del lobby, movimiento sorteado/restante y acción consumida. |
+| Turno | Ronda, fase, actor activo, orden del lobby, movimiento sorteado/restante, acción consumida y presupuesto de 20 segundos útiles con su pausa de animación. |
 | Jugadores | Identidad estable, posición del lobby y asociación con personaje. |
 | Personajes | Clase, salud, nivel, experiencia, estadísticas, efectos, recursos, inventario, equipo y posición. |
 | Disponibilidad | Vivo/muerto; dentro de stage/esperando salida. La conexión online/offline es un dato separado. |
@@ -151,6 +151,8 @@ Fases de combate mínimas:
 | `WON` / `LOST` | Estado terminal, con política de historial/continuación pendiente. |
 
 `WAITING_EXIT` es un estado del personaje, no una pausa global. Quien cruzó deja de participar en los turnos de la stage mientras los demás continúan.
+
+El servidor gobierna el límite de 20 segundos útiles de cada turno de jugador. La cuenta se pausa durante las animaciones y no se pausa por desconexión del control. Al vencer, se serializa el avance con las demás operaciones de la campaña y se persiste antes de difundir el nuevo actor; desde el último jugador se resuelve la fase enemiga. Un ataque con D20 acertado y D6 pendiente se completa con una única tirada automática antes del avance. La cuenta visible pertenece exclusivamente al tablero compartido; los controles móviles reciben solo la disponibilidad normal de sus acciones.
 
 Al comprobar la salida: primero se verifica si quedan personajes vivos. Si no queda ninguno, se aplica derrota; no se permite que una condición vacía de «todos los vivos cruzaron» avance una partida perdida. Si hay vivos y todos están esperando la salida, se realiza una única transición. Los muertos conservan su estado.
 
@@ -204,6 +206,8 @@ Flujo recomendado por operación:
 
 La publicación que confirma una operación ocurre después del guardado. Si falla la escritura, la operación no se presenta como confirmada y el juego informa que no puede continuar hasta recuperar persistencia.
 
+El vencimiento del turno y el D6 automático siguen la misma coordinación, control de revisión y confirmación durable que los comandos de juego. Un reintento autorizado recupera su recibo original aunque el vencimiento haya avanzado la revisión; la conciliación de un guardado incierto no autoriza otra tirada. El tiempo útil y el estado de pausa se restauran al recuperar una campaña, sin reiniciar los 20 segundos.
+
 Colyseus sincroniza las propiedades del estado modificadas desde el servidor. [T05] Añadir eventos explícitos para representar cada tirada, impacto, fallo o botín: varias operaciones pueden terminar en un mismo valor de estado y no deben perder su explicación visual.
 
 Cada evento incluye `eventId`, secuencia, revisión y resultado suficiente para la presentación. El tablero evita reproducir dos veces el mismo evento. Una reconexión recupera el estado actual y solo los eventos pertinentes; no repite todo el combate anterior.
@@ -225,6 +229,8 @@ Tiled exporta mapas con capas visuales y propiedades de objetos/casillas. [T09] 
 Pared, hierba alta y pozo corresponden a las combinaciones de bloqueo acordadas. Una imagen decorativa no determina por sí sola la colisión.
 
 La posición autoritativa utiliza coordenadas enteras de casilla. El tablero convierte casillas a píxeles y anima el desplazamiento. La distancia, la percepción orientada y los algoritmos de línea de visión se concentran en el motor; se probarán especialmente esquinas y obstáculos.
+
+Al entrar en el encuentro, el tablero centra la cámara en el conjunto de jugadores presentes en sus casillas de aparición. El encuadre añade tres casillas visibles por eje respecto del encuadre efectivo anterior y, durante la exploración, mantiene el desplazamiento de cámara al acercarse el personaje activo al borde.
 
 Definir antes de integrar arte: tamaño nativo del tile, tamaño de cada sprite, punto de apoyo, direcciones disponibles, nombres de animación, FPS y capas. El tamaño exacto sigue pendiente y debe acordarse con el equipo de arte.
 

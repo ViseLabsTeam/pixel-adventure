@@ -142,11 +142,14 @@ export interface Content {
   };
 }
 export interface Game {
+  mode: "LOCAL" | "ONLINE";
   itemClassRulesVersion: 1;
   potionSlotsVersion: 1;
   paladinShieldVersion: 1;
   animationUntil?: number;
   animationPending?: boolean;
+  turnRemainingMs?: number;
+  turnDeadlineAt?: number | null;
   pendingAttack?: {
     actorId: string;
     targetId: string;
@@ -296,6 +299,7 @@ export function attackPreview(game: Game, player: Player, enemy: Enemy) {
 }
 export function createGame(id: string, code: string, content: Content): Game {
   return {
+    mode: "LOCAL",
     itemClassRulesVersion: 1,
     potionSlotsVersion: 1,
     paladinShieldVersion: 1,
@@ -312,6 +316,8 @@ export function createGame(id: string, code: string, content: Content): Game {
     movementRoll: null,
     movementLeft: 0,
     actionUsed: false,
+    turnRemainingMs: 0,
+    turnDeadlineAt: null,
     pendingAttack: null,
     players: [],
     enemies: structuredClone(content.enemies),

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import {
   ArrowRight,
@@ -11,6 +11,12 @@ import { classes, guide } from "@umbral/content";
 import type { Session } from "@umbral/protocol";
 import type { CampaignConnection } from "../connection/use-campaign";
 import { CopyButton } from "../ui/shared";
+import {
+  chooseInvitationOrigin,
+  invitationUrl,
+  loadInvitationOrigin,
+  saveInvitationOrigin,
+} from "../connection/invitation";
 export function Lobby({
   connection,
   session,
@@ -22,25 +28,25 @@ export function Lobby({
 }) {
   const { game, connected, pending, command } = connection;
   const [reveal, setReveal] = useState(false),
-    [shareOrigin, setShareOrigin] = useState(
-      import.meta.env.VITE_SHARE_ORIGIN || location.origin,
+    [shareOrigin, setShareOrigin] = useState("");
+  useEffect(() => {
+    if (!game) return;
+    setShareOrigin(
+      chooseInvitationOrigin({
+        mode: game.mode,
+        currentOrigin: location.origin,
+        configuredOrigin:
+          game.mode === "ONLINE"
+            ? import.meta.env.VITE_ONLINE_ORIGIN
+            : import.meta.env.VITE_SHARE_ORIGIN,
+        savedOrigin: loadInvitationOrigin(game.id),
+      }),
     );
+  }, [game?.id, game?.mode]);
   if (!game) return <div className="loading">Preparando la mesa…</div>;
   const isHost = session.role === "COORDINATOR",
     me = game.players.find((p) => p.id === session.playerId),
-    joinUrl = `${shareOrigin.replace(/\/$/, "")}/#/join/${game.code}`;
-  let usableAddress = false;
-  try {
-    const address = new URL(shareOrigin);
-    usableAddress =
-      ["http:", "https:"].includes(address.protocol) &&
-      !["localhost", "127.0.0.1", "[::1]"].includes(address.hostname) &&
-      address.pathname === "/" &&
-      !address.search &&
-      !address.hash;
-  } catch {
-    // Keep the address editable while the user is typing.
-  }
+    joinUrl = invitationUrl(shareOrigin, game.code, game.mode);
   return (
     <main className="lobby">
       <div className="section-heading">
@@ -48,8 +54,9 @@ export function Lobby({
           <span className="eyebrow">ANTES DE CRUZAR</span>
           <h1>La mesa está servida.</h1>
           <p>
-            Cada viajero se une desde su celular. El tablero queda en esta
-            pantalla.
+            {game.mode === "ONLINE"
+              ? "Compartí esta pantalla por videollamada. Cada viajero usa el enlace en su celular para controlar su personaje."
+              : "Cada viajero se une desde su celular. El tablero queda en esta pantalla."}
           </p>
         </div>
         <span className="pill">
@@ -148,8 +155,12 @@ export function Lobby({
         <aside>
           <section className="panel invitation">
             <span className="eyebrow">INVITACIÓN A LA MESA</span>
-            <p>Conectá el celular a la misma red Wi-Fi.</p>
-            {usableAddress ? (
+            <p>
+              {game.mode === "ONLINE"
+                ? "Enviá este enlace HTTPS a quienes jugarán a distancia."
+                : "Conectá el celular a la misma red Wi-Fi."}
+            </p>
+            {joinUrl ? (
               <div className="qr">
                 <QRCodeSVG
                   value={joinUrl}
@@ -161,14 +172,15 @@ export function Lobby({
               </div>
             ) : (
               <p role="alert">
-                Ingresá la IP de esta computadora. localhost solo funciona en
-                esta pantalla.
+                {game.mode === "ONLINE"
+                  ? "Ingresá la dirección HTTPS pública del enlace temporal. La dirección local no llega a jugadores remotos."
+                  : "Ingresá la IP de esta computadora. localhost solo funciona en esta pantalla."}
               </p>
             )}
             <span className="room-code" data-testid="room-code">
               {game.code}
             </span>
-            {usableAddress && (
+            {joinUrl && (
               <>
                 <a className="invitation-url" href={joinUrl}>
                   {joinUrl}
@@ -178,16 +190,26 @@ export function Lobby({
             )}
             <div className="invitation-address">
               <label>
-                Dirección para celulares
+                {game.mode === "ONLINE"
+                  ? "Dirección pública para controles"
+                  : "Dirección para celulares"}
                 <input
                   value={shareOrigin}
-                  onChange={(e) => setShareOrigin(e.target.value)}
-                  placeholder="http://192.168.1.10:8088"
+                  onChange={(e) => {
+                    setShareOrigin(e.target.value);
+                    saveInvitationOrigin(game.id, game.mode, e.target.value);
+                  }}
+                  placeholder={
+                    game.mode === "ONLINE"
+                      ? "https://nombre-temporal.trycloudflare.com"
+                      : "http://192.168.1.10:8088"
+                  }
                 />
               </label>
               <p>
-                Usá la IP de la computadora y mantené el puerto. El QR se
-                actualiza al editarla.
+                {game.mode === "ONLINE"
+                  ? "Abrí la web por el enlace temporal o pegá aquí su dirección. El QR se actualiza al editarla."
+                  : "Usá la IP de la computadora y mantené el puerto. El QR se actualiza al editarla."}
               </p>
             </div>
           </section>

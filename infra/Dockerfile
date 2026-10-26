@@ -10,6 +10,7 @@ COPY packages/content/package.json packages/content/package.json
 RUN pnpm install --frozen-lockfile
 COPY . .
 ARG VITE_SHARE_ORIGIN
+ARG VITE_ONLINE_ORIGIN
 # Derived assets are part of the build context; regenerate them with
 # `pnpm assets:prepare` whenever the source art changes.
 RUN pnpm typecheck && pnpm --filter @umbral/web build && node scripts/build-server.mjs

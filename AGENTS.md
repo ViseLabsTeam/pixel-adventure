@@ -40,6 +40,7 @@ Estas instrucciones se aplican a todo el proyecto. Las indicaciones actuales del
 
 ## Flujo de trabajo y verificación
 
+- Organizar los cambios con subagentes según el [flujo de trabajo con subagentes](docs/flujo-trabajo-agentes.md): responsables de implementación independiente, pruebas, documentación y revisión de seguridad y estructura; el orquestador integra y valida la entrega.
 - Revisar el estado del repositorio antes de editar y preservar trabajo ajeno. No borrar ni reordenar archivos sin una necesidad de la tarea.
 - Cambiar únicamente lo necesario para la entrega solicitada. No contratar servicios, publicar ni migrar datos reales como efecto secundario de una tarea documental.
 - Conservar un solo gestor y lockfile cuando se prepare el workspace. Verificar compatibilidad antes de fijar o actualizar dependencias.

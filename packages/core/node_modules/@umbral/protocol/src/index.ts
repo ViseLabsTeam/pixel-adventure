@@ -1,6 +1,11 @@
 import { z } from "zod";
 // Custom application code; 4001 is reserved for Colyseus server shutdown.
 export const SESSION_REPLACED = 4401;
+export const campaignModeSchema = z.enum(["LOCAL", "ONLINE"]);
+export type CampaignMode = z.infer<typeof campaignModeSchema>;
+export const createCampaignSchema = z
+  .object({ mode: campaignModeSchema.default("LOCAL") })
+  .strict();
 export const classSchema = z.enum(["paladin", "warrior", "mage", "archer"]);
 export const reservationTokenSchema = z.string().regex(/^[a-f0-9]{64}$/);
 export const availabilitySchema = z.object({
@@ -130,9 +135,12 @@ export interface EnemyView {
   maxHp: number;
 }
 export interface GameView {
+  mode: CampaignMode;
   animationUntil: number;
   animationPending: boolean;
   serverNow: number;
+  turnRemainingMs: number;
+  turnDeadlineAt: number | null;
   id: string;
   code: string;
   revision: number;
@@ -234,9 +242,12 @@ export const classAvailabilitySchema: z.ZodType<ClassAvailability> = z.object({
 });
 
 export const gameViewSchema: z.ZodType<GameView> = z.object({
+  mode: campaignModeSchema,
   animationUntil: nonnegative,
   animationPending: z.boolean(),
   serverNow: nonnegative,
+  turnRemainingMs: nonnegative.max(20_000),
+  turnDeadlineAt: nonnegative.nullable(),
   id: z.uuid(),
   code: z.string(),
   revision: nonnegative,
