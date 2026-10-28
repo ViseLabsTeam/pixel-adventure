@@ -1,6 +1,6 @@
 # Umbral — RPG cooperativo web
 
-Demo para **2 a 4 jugadores**, en modo local u online. Una pantalla compartida muestra el tablero; cada celular muestra su ficha y envía acciones. En online, el anfitrión comparte la pantalla del tablero por videollamada. Revisado el **26 de octubre de 2026**.
+Demo para **2 a 4 jugadores**, en modo local u online. Una pantalla compartida muestra el tablero; cada celular muestra su ficha y envía acciones. En online, el anfitrión comparte la pantalla del tablero por videollamada. Revisado el **27 de octubre de 2026**.
 
 ## Probar con Docker
 
@@ -13,7 +13,7 @@ docker compose ps
 
 Abrí **http://127.0.0.1:8088**. Compose crea PostgreSQL 18, aplica las migraciones al iniciar el servidor y sirve la web con Nginx. Las partidas se guardan en el volumen `campaign_data`. Para detener sin borrar las partidas: `docker compose stop`; para continuar: `docker compose up -d`.
 
-La imagen Docker usa los recursos derivados incluidos en el árbol de trabajo. Cuando cambien los GIF o el mapa fuente, ejecutar `pnpm assets:prepare` antes de `docker compose up -d --build`; el build local `pnpm build` también los regenera.
+La imagen Docker usa los recursos derivados incluidos en el árbol de trabajo. Cuando cambien los GIF, el mapa fuente o los sonidos generados, ejecutar `pnpm assets:prepare` antes de `docker compose up -d --build`; el build local `pnpm build` también los regenera.
 
 Los valores predeterminados son para desarrollo local. `.env.example` documenta puertos y variables. PostgreSQL solo publica su puerto en `127.0.0.1:5434`; la web publica `8088`. El servidor y los WebSockets quedan detrás del proxy. El modo online usa el mismo servidor; un enlace temporal HTTPS permite acceder desde otras redes mientras el túnel está activo. No hay alojamiento permanente.
 
@@ -64,11 +64,13 @@ Inicio, configuración local de sonido/volumen/animación/grilla, lobby con QR, 
 
 Cada paso cardinal dura 2 segundos. El D6 de movimiento está centrado sobre las flechas. Para atacar, elegí objetivo y habilidad (básico si no seleccionás otra), tocá el dado D20 y esperá su resultado. Si impacta, se habilita el dado D6 a su lado para calcular el daño final. Si se acaba el turno con un D20 acertado y el D6 pendiente, el servidor tira ese D6 automáticamente una sola vez antes de avanzar. Después se reproduce el ataque, aparece el daño y cambia la barra de vida. Si falla, se muestra el fallo tras el D20 y no se tira D6. Los ataques enemigos conservan su presentación actual. Un fallo no reduce vida.
 
-Cuando un jugador o enemigo recibe daño positivo, su figura se vuelve roja durante un segundo y retrocede levemente en sentido opuesto al atacante, sin cambiar de casilla. Los fallos y los golpes de daño cero no activan este efecto visual; la opción de movimiento reducido lo omite.
+Cuando un jugador o enemigo recibe daño positivo, su figura se vuelve roja durante un segundo, retrocede levemente en sentido opuesto al atacante y desprende partículas rojas, sin cambiar de casilla. Los fallos y los golpes de daño cero no activan estos efectos visuales; la opción de movimiento reducido los omite. La mesa reproduce un sonido de impacto distinto de los de inventario y curación.
 
 El equipo pertenece a una clase: el servidor impide recibir, guardar o equipar objetos de otra clase. El inicio entrega escudo al paladín, espada al guerrero, bastón al mago y arco a la arquera, además de botas y pechera propias. Las pociones son comunes. El botín exclusivo espera en su cofre si no hay un destinatario compatible con espacio. Los guardados anteriores se actualizan con respaldo, conservando los IDs de los objetos.
 
-Tocá una pieza de la bolsa para equipar o descartar, o una poción de Personaje para usar o descartar; después pulsá **Confirmar**. Tocá una pieza equipada para desequiparla; requiere espacio en la bolsa. Si equipás otra pieza en su lugar, la anterior vuelve al mismo espacio de bolsa de la nueva. Las acciones de inventario consumen la acción del turno; **Cancelar** o Escape conservan el estado. Descartar elimina el objeto definitivamente y muestra ese aviso antes de confirmar.
+Tocá una pieza de la bolsa para equipar o descartar, o una poción de Personaje para usar o descartar; después pulsá **Confirmar**. Tocá una pieza equipada para desequiparla; requiere espacio en la bolsa. Si equipás otra pieza en su lugar, la anterior vuelve al mismo espacio de bolsa de la nueva. Al equipar aparecen partículas y un brillo claro que se desvanece en un segundo; consumir una poción produce el mismo efecto en verde. Equipar, desequipar y curarse tienen sonidos distintos en la mesa. Beber de la fuente comparte el sonido de curación, sin brillo verde; desequipar no tiene brillo. Las acciones de inventario consumen la acción del turno; **Cancelar** o Escape conservan el estado. Descartar elimina el objeto definitivamente y muestra ese aviso antes de confirmar.
+
+En **Configuración**, los sonidos de la mesa están activados por defecto y tienen un interruptor distinto del de los clics de los controles. El volumen es común y se guarda en cada dispositivo. Los cuatro sonidos nuevos se oyen solo en la mesa compartida, cuando llega la acción confirmada. Si el navegador bloquea audio hasta una interacción del anfitrión, la mesa ofrece **Activar sonido**. Reducir movimiento no silencia los sonidos.
 
 El preset empieza en combate: distancia Manhattan, redondeo hacia abajo, daño mínimo cero y una acción por turno. Equipar, desequipar, consumir e interactuar gastan esa acción. Los cofres se abren tras eliminar los enemigos; el botín va al primer personaje vivo con espacio, o queda junto al cofre. La salida **termina el encuentro de demo**, no implementa la transición entre stages. Ver [políticas y valores](docs/demo.md).
 
@@ -102,7 +104,7 @@ Para abrirlo, ubicar apariciones, agregar o mover enemigos del catálogo, coloca
 | `pnpm build`            | Recursos derivados, tipos, bundle web y servidor.                                             |
 | `pnpm test:integration` | Pruebas PostgreSQL sobre una base cuyo nombre termine en `_test`.                             |
 | `pnpm test:e2e`         | Navegador contra la demo levantada; crea campañas de prueba.                                  |
-| `pnpm assets:prepare`   | Regenera retratos, escenario, animaciones, vistas de dados y manifiesto; conserva originales. |
+| `pnpm assets:prepare`   | Regenera retratos, escenario, animaciones, vistas de dados, cuatro WAV y manifiesto; conserva originales. |
 | `pnpm format`           | Formatea código y pruebas.                                                                    |
 | `pnpm docs:check`       | Comprueba enlaces locales de Markdown.                                                        |
 
@@ -122,7 +124,7 @@ Puede cambiarse la conexión mediante `TEST_DATABASE_URL`. Las pruebas eliminan 
 - `packages/core`: reglas independientes y aleatoriedad inyectada.
 - `packages/protocol`: contratos y validación de comandos.
 - `packages/content`: catálogo público y preset exclusivo del servidor.
-- `assets/{paladin,guerrero,mago,arquera,enemigos,mapas,maestro,dados,fuentes}`: recursos por categoría; derivados dentro de `generated` cuando corresponde.
+- `assets/{paladin,guerrero,mago,arquera,enemigos,mapas,maestro,dados,fuentes,audio}`: recursos por categoría; derivados dentro de `generated` cuando corresponde.
 - `infra`, `scripts`, `tests/e2e`: contenedores, herramientas y pruebas.
 
 | Documento                                                                                                               | Contenido                                                 |

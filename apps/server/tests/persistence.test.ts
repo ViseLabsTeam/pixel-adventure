@@ -98,10 +98,39 @@ it("persiste el intercambio de cascos en su espacio original con bolsa llena", a
     player.inventory[3],
   ]);
   expect(after.players[0].equipment.helmet).toBe("helmet-new");
+  expect(receipt.events.at(-1)).toMatchObject({
+    kind: "EQUIP",
+    actorId: player.id,
+  });
+  expect(after.events.at(-1)).toMatchObject({
+    kind: "EQUIP",
+    actorId: player.id,
+  });
   expect(after.items["helmet-old"].ownerId).toBe(player.id);
   expect(await api.execute(f.one.token, request, f.online)).toEqual(receipt);
   expect(await api.readGame(game.id)).toEqual(after);
 });
+it("persiste el origen de una poción y no duplica su evento al reintentar", async () => {
+  const f = await setup();
+  const game = await api.readGame(f.host.session.campaignId);
+  const itemId = game.players[0].potions[0]!;
+  const request = {
+    commandId: randomUUID(),
+    expectedRevision: game.revision,
+    action: { type: "USE_ITEM", itemId },
+  };
+  const receipt = await api.execute(f.one.token, request, f.online);
+  const after = await api.readGame(game.id);
+  expect(receipt.events.at(-1)).toMatchObject({
+    kind: "HEAL",
+    actorId: f.one.playerId,
+    source: "POTION",
+  });
+  expect(after.events.at(-1)).toMatchObject(receipt.events.at(-1)!);
+  expect(after.items[itemId]).toBeUndefined();
+  expect(await api.execute(f.one.token, request, f.online)).toEqual(receipt);
+  expect(await api.readGame(game.id)).toEqual(after);
+}, 15_000);
 it("rechaza desequipar con bolsa llena sin gastar la acción y confirma al liberar espacio", async () => {
   const f = await setup();
   const game = await api.readGame(f.host.session.campaignId);

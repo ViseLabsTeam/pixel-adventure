@@ -15,7 +15,7 @@
     "test:integration": "vitest run apps/server/tests",
     "test:e2e": "playwright test",
     "db:migrate": "pnpm --filter @umbral/server migrate",
-    "assets:prepare": "node scripts/prepare-assets.mjs",
+    "assets:prepare": "node scripts/prepare-assets.mjs && node scripts/generate-sfx.mjs",
     "content:validate": "tsx scripts/validate-content.ts",
     "format": "prettier --write \"apps/**/*.{ts,tsx,css,json}\" \"packages/**/*.{ts,json}\" \"scripts/*.{ts,mjs}\" \"tests/**/*.ts\" playwright.config.ts",
     "format:check": "prettier --check \"apps/**/*.{ts,tsx,css,json}\" \"packages/**/*.{ts,json}\" \"scripts/*.{ts,mjs}\" \"tests/**/*.ts\" playwright.config.ts",

@@ -34,18 +34,39 @@ export function Health({
 }
 export interface Preferences {
   sound: boolean;
+  tableSound: boolean;
   volume: number;
   reducedMotion: boolean;
   grid: boolean;
 }
+const defaultPreferences: Preferences = {
+  sound: false,
+  tableSound: true,
+  volume: 0.3,
+  reducedMotion: false,
+  grid: true,
+};
 export function readPreferences(): Preferences {
   try {
+    const stored: unknown = JSON.parse(
+      localStorage.getItem("umbral.preferences") ?? "{}",
+    );
+    if (!stored || typeof stored !== "object") return defaultPreferences;
+    const value = stored as Record<string, unknown>;
     return {
-      ...{ sound: false, volume: 0.3, reducedMotion: false, grid: true },
-      ...JSON.parse(localStorage.getItem("umbral.preferences") ?? "{}"),
+      sound: typeof value.sound === "boolean" ? value.sound : false,
+      tableSound:
+        typeof value.tableSound === "boolean" ? value.tableSound : true,
+      volume:
+        typeof value.volume === "number" && Number.isFinite(value.volume)
+          ? Math.max(0, Math.min(1, value.volume))
+          : 0.3,
+      reducedMotion:
+        typeof value.reducedMotion === "boolean" ? value.reducedMotion : false,
+      grid: typeof value.grid === "boolean" ? value.grid : true,
     };
   } catch {
-    return { sound: false, volume: 0.3, reducedMotion: false, grid: true };
+    return defaultPreferences;
   }
 }
 export function Header({
@@ -122,6 +143,19 @@ export function Settings({
             type="checkbox"
             checked={value.sound}
             onChange={(e) => onChange({ ...value, sound: e.target.checked })}
+          />
+        </label>
+        <label className="setting-row">
+          <span>
+            {value.tableSound ? <Volume2 size={18} /> : <VolumeX size={18} />}{" "}
+            Sonidos de la mesa
+          </span>
+          <input
+            type="checkbox"
+            checked={value.tableSound}
+            onChange={(e) =>
+              onChange({ ...value, tableSound: e.target.checked })
+            }
           />
         </label>
         <label className="setting-row">

@@ -11,6 +11,7 @@ import {
 } from "@umbral/content";
 import type { GameView } from "@umbral/protocol";
 import type { Preferences } from "../ui/shared";
+import { playTableSound } from "../ui/table-sound";
 import { facingOriginX } from "./sprite-facing";
 import { impactKnockback, isDamagingImpact } from "./impact-knockback";
 import {
@@ -30,6 +31,12 @@ import treeLayers from "../../../../assets/mapas/generated/trees.json";
 const actorArt = { ...actorRecipes.players, ...actorRecipes.enemies };
 type ActorArtId = keyof typeof actorArt;
 type ImpactVisual = Phaser.GameObjects.Sprite | Phaser.GameObjects.Container;
+type ActorEffect = {
+  particles: Phaser.GameObjects.Arc[];
+  glow?: Phaser.GameObjects.Arc;
+  tweens: Phaser.Tweens.Tween[];
+  timer: Phaser.Time.TimerEvent;
+};
 type Clip = {
   duration: number;
   delays: number[];
@@ -68,6 +75,7 @@ class Courtyard extends Phaser.Scene {
       restoreColor: () => void;
     }
   >();
+  private actorEffects = new Map<string, ActorEffect>();
   seen = new Set<string>();
   initialized = false;
   visualJobs = new Set<() => void>();
@@ -132,6 +140,78 @@ class Courtyard extends Phaser.Scene {
     this.impactVisuals.delete(id);
     this.syncImpactMarker();
   }
+  private clearActorEffect(id: string) {
+    const effect = this.actorEffects.get(id);
+    if (!effect) return;
+    effect.timer.remove();
+    for (const tween of effect.tweens) tween.stop();
+    for (const particle of effect.particles) particle.destroy();
+    effect.glow?.destroy();
+    this.actorEffects.delete(id);
+  }
+  private showActorEffect(
+    id: string,
+    actor: Phaser.GameObjects.Container,
+    kind: "damage" | "equip" | "potion",
+  ) {
+    if (this.preferences.reducedMotion) return;
+    this.clearActorEffect(id);
+    if (kind !== "damage" && this.impactVisuals.has(id)) return;
+    const duration = kind === "damage" ? 450 : 1000;
+    const colors =
+      kind === "damage"
+        ? [0xff454e, 0xff8170]
+        : kind === "equip"
+          ? [0xfff7d7, 0xf5de96]
+          : [0x9df5aa, 0x56d887];
+    const particles: Phaser.GameObjects.Arc[] = [];
+    const tweens: Phaser.Tweens.Tween[] = [];
+    let glow: Phaser.GameObjects.Arc | undefined;
+    if (kind !== "damage") {
+      glow = this.add
+        .circle(0, -30, 42, colors[0], 0.28)
+        .setBlendMode(Phaser.BlendModes.ADD);
+      actor.addAt(glow, 1);
+      tweens.push(
+        this.tweens.add({
+          targets: glow,
+          alpha: 0,
+          scale: 1.35,
+          duration,
+          ease: "Sine.easeOut",
+        }),
+      );
+    }
+    for (let index = 0; index < 8; index++) {
+      const angle = (index * Math.PI) / 4;
+      const distance = kind === "damage" ? 30 : 24;
+      const particle = this.add
+        .circle(0, -26, index % 2 ? 2 : 3, colors[index % 2], 0.95)
+        .setBlendMode(Phaser.BlendModes.ADD);
+      actor.addAt(particle, (glow ? 2 : 1) + index);
+      particles.push(particle);
+      tweens.push(
+        this.tweens.add({
+          targets: particle,
+          x: Math.cos(angle) * distance,
+          y: -26 + Math.sin(angle) * distance - (kind === "damage" ? 0 : 10),
+          alpha: 0,
+          scale: 0.35,
+          duration,
+          ease: "Sine.easeOut",
+        }),
+      );
+    }
+    const effect: ActorEffect = {
+      particles,
+      glow,
+      tweens,
+      timer: this.time.delayedCall(duration, () => {
+        if (this.actorEffects.get(id) === effect) this.clearActorEffect(id);
+      }),
+    };
+    this.actorEffects.set(id, effect);
+  }
   private showHitReaction(
     event: GameView["events"][number],
     target: Phaser.GameObjects.Container,
@@ -140,6 +220,7 @@ class Courtyard extends Phaser.Scene {
     defender: { x: number; y: number },
   ) {
     if (!isDamagingImpact(event, this.preferences.reducedMotion)) return;
+    this.clearActorEffect(entityId);
     this.clearImpactVisual(entityId);
     const sprite = target.getByName(
       "sprite",
@@ -323,12 +404,15 @@ class Courtyard extends Phaser.Scene {
       if (remaining > 0) this.pendingImpacts.set(entity.id, remaining);
       else this.pendingImpacts.delete(entity.id);
     };
+    const damaging = isDamagingImpact(event);
+    if (damaging) playTableSound("damage", this.preferences);
     if (this.preferences.reducedMotion) {
       finishHealth();
       return;
     }
     if (attacker)
       this.showHitReaction(event, target, entity.id, attacker, entity);
+    if (damaging) this.showActorEffect(entity.id, target, "damage");
     const done = this.beginVisual();
     const fx = this.add
       .circle(
@@ -470,6 +554,7 @@ class Courtyard extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       for (const id of [...this.impactVisuals.keys()])
         this.clearImpactVisual(id);
+      for (const id of [...this.actorEffects.keys()]) this.clearActorEffect(id);
     });
     for (const id of Object.keys(actorArt) as ActorArtId[]) {
       const clips = this.cache.json.get(id + "-clips") as Record<string, Clip>;
@@ -525,6 +610,7 @@ class Courtyard extends Phaser.Scene {
     if (this.preferences.reducedMotion) {
       for (const id of [...this.impactVisuals.keys()])
         this.clearImpactVisual(id);
+      for (const id of [...this.actorEffects.keys()]) this.clearActorEffect(id);
       for (const done of this.visualJobs) done();
     }
     const grid = this.grid!;
@@ -876,6 +962,26 @@ class Courtyard extends Phaser.Scene {
       }
       if (["ATTACK_D20", "ATTACK_MISS_ROLL", "ATTACK_D6"].includes(event.kind))
         continue;
+      if (this.initialized && event.kind === "EQUIP") {
+        playTableSound("equip", this.preferences);
+        if (event.actorId) {
+          const actor = this.actors.get(event.actorId);
+          if (actor) this.showActorEffect(event.actorId, actor, "equip");
+        }
+        continue;
+      }
+      if (this.initialized && event.kind === "UNEQUIP") {
+        playTableSound("unequip", this.preferences);
+        continue;
+      }
+      if (this.initialized && event.kind === "HEAL") {
+        playTableSound("heal", this.preferences);
+        if (event.source === "POTION" && event.actorId) {
+          const actor = this.actors.get(event.actorId);
+          if (actor) this.showActorEffect(event.actorId, actor, "potion");
+        }
+        continue;
+      }
       if (!this.initialized || !event.actorId || !event.targetId) continue;
       const actor = this.actors.get(event.actorId),
         target = this.actors.get(event.targetId);
@@ -947,6 +1053,7 @@ class Courtyard extends Phaser.Scene {
     for (const [id, actor] of this.actors)
       if (!visible.has(id)) {
         this.clearImpactVisual(id);
+        this.clearActorEffect(id);
         actor.destroy();
         this.actors.delete(id);
         this.positions.delete(id);

@@ -72,6 +72,7 @@ export interface Event {
   targetId?: string;
   ability?: Ability;
   amount?: number;
+  source?: "POTION" | "FOUNTAIN";
 }
 export interface Chest extends Point {
   id: string;
@@ -341,7 +342,10 @@ function addEvent(
   kind: string,
   text: string,
   dice?: number[],
-  detail?: Pick<Event, "actorId" | "targetId" | "ability" | "amount">,
+  detail?: Pick<
+    Event,
+    "actorId" | "targetId" | "ability" | "amount" | "source"
+  >,
 ) {
   game.events.push({
     id: `${game.id}:${game.revision + 1}:${game.events.length}:${kind}`,
@@ -848,7 +852,15 @@ export function resolve(
       consumeAction(game);
       player.inventory[index] = player.equipment[item.slot];
       player.equipment[item.slot] = item.id;
-      addEvent(game, "EQUIP", `${player.name} equipa ${item.name}.`);
+      addEvent(
+        game,
+        "EQUIP",
+        `${player.name} equipa ${item.name}.`,
+        undefined,
+        {
+          actorId: player.id,
+        },
+      );
       break;
     }
     case "UNEQUIP": {
@@ -863,6 +875,8 @@ export function resolve(
         game,
         "UNEQUIP",
         `${player.name} desequipa ${game.items[id].name}.`,
+        undefined,
+        { actorId: player.id },
       );
       break;
     }
@@ -889,6 +903,8 @@ export function resolve(
         game,
         "HEAL",
         `${player.name} usa una poción: recupera vida y recurso.`,
+        undefined,
+        { actorId: player.id, source: "POTION" },
       );
       break;
     }
@@ -967,7 +983,10 @@ export function resolve(
         consumeAction(game);
         player.hp = Math.min(player.stats.maxHp, player.hp + 8);
         game.fountainUsed.push(player.id);
-        addEvent(game, "HEAL", `${player.name} bebe de la fuente.`);
+        addEvent(game, "HEAL", `${player.name} bebe de la fuente.`, undefined, {
+          actorId: player.id,
+          source: "FOUNTAIN",
+        });
       } else {
         requireRule(
           !game.enemies.some((e) => e.hp > 0),

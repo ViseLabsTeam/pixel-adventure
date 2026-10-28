@@ -1,8 +1,8 @@
 # Inventario de assets y recursos pendientes
 
-La interfaz usa [Pixel Operator](../assets/fuentes/pixel-operator/README.md), una fuente bitmap con variantes regular y negrita y licencia CC0 incluida. Es un recurso de UI separado de las 20 imágenes de personajes y escenario contabilizadas abajo.
+La interfaz usa [Pixel Operator](../assets/fuentes/pixel-operator/README.md), una fuente bitmap con variantes regular y negrita y licencia CC0 incluida. Es un recurso de UI separado de las imágenes de personajes y escenario contabilizadas abajo. La mesa usa además [cuatro sonidos originales](../assets/audio/README.md) generados para este proyecto.
 
-Revisión: **19 de octubre de 2026**. Alcance: archivos de imagen presentes en el repositorio, metadatos e integración de demo. El **paladín es el conjunto completo de referencia**, según la indicación del responsable. Completo describe su catálogo recibido, no el balance definitivo.
+Revisión: **27 de octubre de 2026**. Alcance: archivos de imagen y audio presentes en el repositorio, metadatos e integración de demo. El **paladín es el conjunto completo de referencia**, según la indicación del responsable. Completo describe su catálogo recibido, no el balance definitivo.
 
 ## Resumen actual
 
@@ -18,6 +18,8 @@ Revisión: **19 de octubre de 2026**. Alcance: archivos de imagen presentes en e
 | Dados     |              2 GIF | 320 × 320                  | [D6 y D20 integrados en el control y la mesa](../assets/dados/README.md).                    |
 
 Total: **37 imágenes: 33 GIF y 4 PNG**, con **111.720.227 bytes, aproximadamente 106,54 MiB**, de archivos fuente. El tamaño corresponde a los originales, no a una descarga optimizada del juego.
+
+El [audio de la mesa](../assets/audio/README.md) consta de cuatro WAV mono de menos de un segundo: daño, equipar, desequipar y curarse. Proceden de un generador determinista propio, sin muestras de terceros; no forman parte del conteo de imágenes. Las partículas y los brillos de daño, equipo y poción se dibujan en Phaser y no requieren imágenes adicionales.
 
 ## Catálogo de referencia del paladín
 
@@ -69,7 +71,7 @@ El [inventario del goblin](../assets/enemigos/goblin/README.md) registra los dos
 
 El editor de mapas permite colocar y mover apariciones del [catálogo de enemigos](../packages/content/enemy-recipes.json), incluidos tipos con marcador provisional. Las ubicaciones se guardan en `collision.json` y se generan para las partidas nuevas; colocar un enemigo no agrega archivos de arte ni aprueba habilidades. El [tutorial](tutorial-editor-mapas.md) describe la edición y la incorporación al juego.
 
-Los cofres, árboles, escaleras y otros elementos visibles en el PNG llegaron integrados en una sola imagen. Siete árboles grandes tienen ahora recortes transparentes derivados del PNG para ordenar su copa frente a los personajes; no son objetos interactivos. Cofres y zonas mantienen marcadores de demo. Tampoco se encontraron archivos separados de iconos de inventario, interfaz o audio; su necesidad y alcance se evalúan en la iteración correspondiente.
+Los cofres, árboles, escaleras y otros elementos visibles en el PNG llegaron integrados en una sola imagen. Siete árboles grandes tienen ahora recortes transparentes derivados del PNG para ordenar su copa frente a los personajes; no son objetos interactivos. Cofres y zonas mantienen marcadores de demo. No se encontraron archivos separados de iconos de inventario o interfaz; su necesidad y alcance se evalúan en la iteración correspondiente. Los cuatro sonidos de acción fueron creados en este proyecto y no provienen de los recursos gráficos recibidos.
 
 ## Preparación para integrar
 

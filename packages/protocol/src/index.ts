@@ -192,6 +192,7 @@ export interface GameView {
     targetId?: string;
     ability?: "basic" | "special" | "ultimate";
     amount?: number;
+    source?: "POTION" | "FOUNTAIN";
   }[];
   onlinePlayerIds: string[];
   paused: boolean;
@@ -225,6 +226,7 @@ const eventSchema = z.object({
   targetId: z.string().optional(),
   ability: z.enum(["basic", "special", "ultimate"]).optional(),
   amount: z.number().optional(),
+  source: z.enum(["POTION", "FOUNTAIN"]).optional(),
 });
 
 export const sessionSchema: z.ZodType<Session> = z.object({

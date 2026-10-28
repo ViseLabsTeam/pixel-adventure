@@ -150,6 +150,7 @@ export const saveSchema = z.object({
       targetId: z.string().optional(),
       ability: z.enum(["basic", "special", "ultimate"]).optional(),
       amount: integer.optional(),
+      source: z.enum(["POTION", "FOUNTAIN"]).optional(),
     }),
   ),
   fountainUsed: z.array(z.string()),

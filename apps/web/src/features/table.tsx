@@ -10,6 +10,13 @@ import { useImpactPresentation } from "../ui/use-impact-presentation";
 import { TableDiceSpotlight } from "./table-dice-spotlight";
 import { recentActionEvents } from "./table-chronicle";
 import {
+  configureTableSounds,
+  preloadTableSounds,
+  stopTableSounds,
+  tableSoundReady,
+  unlockTableSound,
+} from "../ui/table-sound";
+import {
   chooseInvitationOrigin,
   invitationUrl,
   loadInvitationOrigin,
@@ -35,6 +42,33 @@ export function Table({
   const [menuOpen, setMenuOpen] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(20);
   const [shareOrigin, setShareOrigin] = useState("");
+  const [audioReady, setAudioReady] = useState(tableSoundReady);
+
+  useEffect(() => {
+    configureTableSounds(preferences);
+    if (preferences.tableSound) {
+      preloadTableSounds();
+      setAudioReady(tableSoundReady());
+    } else setAudioReady(false);
+  }, [preferences.tableSound, preferences.volume]);
+
+  useEffect(() => {
+    let mounted = true;
+    const unlock = () => {
+      if (tableSoundReady()) return;
+      void unlockTableSound().then((ready) => {
+        if (mounted) setAudioReady(ready);
+      });
+    };
+    window.addEventListener("pointerdown", unlock);
+    window.addEventListener("keydown", unlock);
+    return () => {
+      mounted = false;
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+      stopTableSounds();
+    };
+  }, []);
 
   useEffect(() => {
     if (!game) return;
@@ -294,6 +328,14 @@ export function Table({
         >
           Configuración
         </button>
+        {preferences.tableSound && preferences.volume > 0 && !audioReady && (
+          <button
+            className="button small"
+            onClick={() => void unlockTableSound().then(setAudioReady)}
+          >
+            Activar sonido de la mesa
+          </button>
+        )}
         <button className="button small" onClick={onHome}>
           Volver al inicio
         </button>
