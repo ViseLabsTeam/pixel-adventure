@@ -1,9 +1,0 @@
-services:
-  db:
-    ports: !override []
-  server:
-    image: umbral-demo-server:latest
-  web:
-    image: umbral-demo-web:latest
-    ports: !override
-      - "127.0.0.1:8089:80"

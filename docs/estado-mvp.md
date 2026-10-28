@@ -1,6 +1,6 @@
 # Estado y verificación del MVP
 
-Revisión: **22 de octubre de 2026**. Entrega: demo 0.1.0 en el árbol de trabajo, sin commit creado por el agente. Este registro distingue la demo solicitada de la aventura completa; ver [contrato](demo.md) y [brief](../rpg-cooperativo-brief-mvp.md).
+Revisión: **28 de octubre de 2026**. Entrega: demo 0.1.0 en el árbol de trabajo, sin commit creado por el agente. Este registro distingue la demo solicitada de la aventura completa; ver [contrato](demo.md) y [brief](../rpg-cooperativo-brief-mvp.md).
 
 ## Estado actual
 
@@ -17,6 +17,14 @@ Revisión: **22 de octubre de 2026**. Entrega: demo 0.1.0 en el árbol de trabaj
 | Assets          | 37 imágenes fuente centralizadas, retratos, dados y spritesheets derivados; guerrero W/S, arquera y goblin integrados.                                                   |
 | Pruebas         | Motor, PostgreSQL y navegador; resultados y límites de cada iteración abajo.                                                                                             |
 | Pendientes      | Ajustar objetos menores del escenario, recursos ausentes, balance, habilidades, aventura, percepción, stages, altares, transferencias, CI y dispositivos físicos.        |
+
+## Partículas y sonidos de la mesa — 27–28/10/2026
+
+El tablero incorpora partículas para daño positivo, equipamiento y consumo de poción; equipar y consumir muestran además un brillo de un segundo. Cuatro WAV originales distinguen daño, equipar, desequipar y curarse. Los eventos confirmados identifican al personaje y diferencian poción de fuente sin publicar el ID del objeto.
+
+Verificación realizada: pasaron TypeScript, formato, 77 pruebas unitarias y 47 pruebas de integración con PostgreSQL de prueba; `docs:check` validó 25 documentos y 197 enlaces. Docker reconstruyó web y servidor conservando el volumen de campañas: base y servidor quedaron saludables, web y `/health/ready` respondieron 200, y los cuatro WAV respondieron 200. Playwright cargó el tablero con dos personajes y sin recursos gráficos fallidos; se inspeccionó su captura inicial.
+
+La prueba de equipamiento visual y reproducción en navegador no llegó a confirmar la acción: tanto la demo principal como una instancia Docker aislada registraron timeouts de conexión a PostgreSQL durante esos intentos. No se observó todavía el brillo ni se escucharon los WAV en un navegador real. La instancia y su volumen de prueba se retiraron; esta comprobación queda pendiente para un entorno sin esos timeouts.
 
 ## Colisiones y árboles — 19/10/2026
 
