@@ -1,0 +1,21 @@
+name: umbral-server
+
+services:
+  server:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+      target: server
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 2567
+      DATABASE_URL: ${DATABASE_URL:?Set a private PostgreSQL URL}
+      APP_ORIGINS: ${APP_ORIGINS:?Set the public web origin}
+    ports:
+      - "127.0.0.1:${SERVER_PORT:-2567}:2567"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:2567/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6

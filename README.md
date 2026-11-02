@@ -80,6 +80,10 @@ La ficha móvil muestra ocho atributos con símbolos en dos columnas: precisión
 
 ## Desarrollo
 
+### Despliegue preparado
+
+El [despliegue con web estática en Vercel y servidor Colyseus persistente](docs/despliegue-servidor-persistente.md) conserva el contrato público `/api/*`, `/realtime/*` y `/health/*` mediante un gateway HTTPS delante de ambos. `vercel.json` compila solo `web`; el servicio `server` ejecuta un único proceso Node.js con PostgreSQL externo. La configuración está preparada, pero aún no se probó en un dominio público.
+
 Node.js **22.12 o superior** (verificado localmente con 22.14; Docker usa 24), pnpm **10.34.7**. Un solo gestor y `pnpm-lock.yaml`.
 
 ```sh

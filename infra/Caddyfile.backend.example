@@ -1,0 +1,20 @@
+# Public single-origin gateway. Set PUBLIC_HOST to the gateway hostname and
+# WEB_UPSTREAM to the Vercel deployment hostname, without a scheme or path,
+# and BACKEND_UPSTREAM to the local Node address (for example 127.0.0.1:2567).
+{$PUBLIC_HOST} {
+  @backend path /api/* /health/*
+  handle @backend {
+    reverse_proxy {$BACKEND_UPSTREAM}
+  }
+
+  # Colyseus listens at /matchmake and /:process/:room internally.
+  handle_path /realtime/* {
+    reverse_proxy {$BACKEND_UPSTREAM}
+  }
+
+  handle {
+    reverse_proxy https://{$WEB_UPSTREAM} {
+      header_up Host {upstream_hostport}
+    }
+  }
+}
