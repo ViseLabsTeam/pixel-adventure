@@ -24,6 +24,7 @@ import type { CampaignConnection } from "../connection/use-campaign";
 import { ResourceBar } from "../ui/resource-bar";
 import { Health } from "../ui/shared";
 import { useImpactPresentation } from "../ui/use-impact-presentation";
+import { DieButtonArt } from "../ui/die-button-art";
 import { DiceRoll } from "../ui/dice-roll";
 import { InventoryDialog, type InventorySelection } from "./inventory-dialog";
 import { perceivedEnemies, perceptionRange } from "./perceived-enemies";
@@ -135,6 +136,24 @@ export function Controller({
     !game.storageError;
   const canMove = enabled && game.phase === "MOVEMENT" && game.movementLeft > 0,
     canAct = enabled && !game.actionUsed;
+  const canRollMovement =
+    enabled &&
+    game.phase === "MOVEMENT" &&
+    game.movementRoll === null &&
+    game.movementMode !== "EXPLORATION";
+  const canRollAttack =
+    canAct &&
+    !game.pendingAttack &&
+    enemyIdsInRange.includes(target) &&
+    !!game.targets[target]?.valid &&
+    player.resource >=
+      (selectedAbility === "special"
+        ? 100
+        : selectedAbility === "ultimate"
+          ? 300
+          : 0);
+  const canRollDamage =
+    enabled && !!game.pendingAttack && game.pendingAttack.actorId === player.id;
   const selectedItem = inventorySelection
     ? game.items[inventorySelection.itemId]
     : undefined;
@@ -334,28 +353,30 @@ export function Controller({
         <div className="control-columns">
           <section className="panel movement-panel">
             <div className="panel-heading">
-              <h2>Movimiento</h2>
+              <h2>
+                {game.encounterMode === "EXPLORATION"
+                  ? "Exploración"
+                  : "Movimiento"}
+              </h2>
               <span>{game.movementLeft} CASILLAS</span>
             </div>
             <button
               className="dice-button"
               aria-label="Tirar movimiento D6"
-              disabled={
-                !enabled ||
-                game.phase !== "MOVEMENT" ||
-                game.movementRoll !== null
-              }
+              disabled={!canRollMovement}
               onClick={() => command({ type: "ROLL_MOVEMENT" })}
             >
-              <img
-                className="die-button-icon"
-                src="/assets/dados/generated/d6.png"
-                alt=""
+              <DieButtonArt
+                sides={6}
+                enabled={canRollMovement}
+                reducedMotion={preferences.reducedMotion}
               />
               <span className="die-button-label">
-                {game.movementRoll === null || movementRolling
-                  ? "Tirar D6"
-                  : `D6: ${game.movementRoll}`}
+                {game.movementMode === "EXPLORATION"
+                  ? "Sin tirada"
+                  : game.movementRoll === null || movementRolling
+                    ? "Tirar D6"
+                    : `D6: ${game.movementRoll}`}
               </span>
             </button>
             <div className="dpad">
@@ -485,18 +506,7 @@ export function Controller({
               <button
                 className="die-button attack-die"
                 aria-label={`Tirar D20 para ${selectedAbility === "basic" ? "ataque básico" : selectedAbility === "special" ? "especial" : "ulti"}`}
-                disabled={
-                  !canAct ||
-                  !!game.pendingAttack ||
-                  !enemyIdsInRange.includes(target) ||
-                  !game.targets[target]?.valid ||
-                  player.resource <
-                    (selectedAbility === "special"
-                      ? 100
-                      : selectedAbility === "ultimate"
-                        ? 300
-                        : 0)
-                }
+                disabled={!canRollAttack}
                 onClick={() =>
                   command({
                     type: "ATTACK",
@@ -505,20 +515,24 @@ export function Controller({
                   })
                 }
               >
-                <img src="/assets/dados/generated/d20.png" alt="" />
+                <DieButtonArt
+                  sides={20}
+                  enabled={canRollAttack}
+                  reducedMotion={preferences.reducedMotion}
+                />
                 <span>D20 · ataque</span>
               </button>
               <button
                 className="die-button attack-die"
                 aria-label="Tirar D6 para calcular el daño"
-                disabled={
-                  !enabled ||
-                  !game.pendingAttack ||
-                  game.pendingAttack.actorId !== player.id
-                }
+                disabled={!canRollDamage}
                 onClick={() => command({ type: "ROLL_ATTACK_D6" })}
               >
-                <img src="/assets/dados/generated/d6.png" alt="" />
+                <DieButtonArt
+                  sides={6}
+                  enabled={canRollDamage}
+                  reducedMotion={preferences.reducedMotion}
+                />
                 <span>D6 · daño</span>
               </button>
             </div>

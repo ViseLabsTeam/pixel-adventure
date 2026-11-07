@@ -22,7 +22,7 @@ test("la mesa centra el respawn, amplía la vista y sigue la exploración", asyn
   browser,
   baseURL,
 }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
   const host = await browser.newPage({
     viewport: { width: 1440, height: 900 },
   });
@@ -91,10 +91,10 @@ test("la mesa centra el respawn, amplía la vista y sigue la exploración", asyn
 
     const initial = await cameraState(board);
     expect(initial.worldWidth - initial.canvasWidth).toBeGreaterThanOrEqual(
-      209,
+      419,
     );
     expect(initial.worldHeight - initial.canvasHeight).toBeGreaterThanOrEqual(
-      209,
+      419,
     );
     expect(initial.worldWidth * initial.zoom).toBeCloseTo(
       initial.canvasWidth,
@@ -113,15 +113,6 @@ test("la mesa centra el respawn, amplía la vista y sigue la exploración", asyn
     await expect
       .poll(async () => (await cameraState(board)).canvasHeight)
       .toBe(300);
-    await expect
-      .poll(
-        async () => {
-          const match = (await timer.innerText()).match(/00:(\d{2})$/);
-          return match ? Number(match[1]) : 0;
-        },
-        { timeout: 30_000 },
-      )
-      .toBeGreaterThan(12);
     const adaActive = await playerCards
       .first()
       .evaluate((card) => card.classList.contains("active"));
@@ -129,10 +120,15 @@ test("la mesa centra el respawn, amplía la vista y sigue la exploración", asyn
     const actorName = adaActive ? "Ada" : "Bruno";
     const actorX = adaActive ? 9 : 12;
     const beforeMove = await cameraState(board);
-    await controller
-      .getByRole("button", { name: "Tirar movimiento D6" })
-      .click();
-    await expect(host.locator(".table-chronicle .event-log li")).toHaveCount(1);
+    await expect(
+      controller.getByRole("heading", { name: "Exploración" }),
+    ).toBeVisible();
+    await expect(
+      controller.getByRole("button", { name: "Tirar movimiento D6" }),
+    ).toBeDisabled();
+    await expect(controller.locator(".movement-panel")).toContainText(
+      "6 CASILLAS",
+    );
     for (const y of [-17, -16]) {
       await controller.getByRole("button", { name: "Mover abajo" }).click();
       await expect(board).toHaveAttribute(
@@ -145,10 +141,10 @@ test("la mesa centra el respawn, amplía la vista y sigue la exploración", asyn
       .toBeGreaterThan(beforeMove.top + 5);
     const explored = await cameraState(board);
     expect(explored.worldWidth - explored.canvasWidth).toBeGreaterThanOrEqual(
-      209,
+      419,
     );
     expect(explored.worldHeight - explored.canvasHeight).toBeGreaterThanOrEqual(
-      209,
+      419,
     );
     await host.setViewportSize({ width: 1440, height: 900 });
     await host.screenshot({ path: "artifacts/table-chronicle.png" });

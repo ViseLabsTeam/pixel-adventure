@@ -1,8 +1,21 @@
 # Estado y verificación del MVP
 
-Revisión: **28 de octubre de 2026**. Entrega: demo 0.1.0 en el árbol de trabajo, sin commit creado por el agente. Este registro distingue la demo solicitada de la aventura completa; ver [contrato](demo.md) y [brief](../rpg-cooperativo-brief-mvp.md).
+Revisión: **7 de noviembre de 2026**. Entrega: demo 0.1.0 en el árbol de trabajo, sin commit creado por el agente. Este registro distingue la demo solicitada de la aventura completa; ver [contrato](demo.md) y [brief](../rpg-cooperativo-brief-mvp.md).
 
-## Estado actual
+## Exploración, cofres y goblin arquero — 07/11/2026
+
+Implementado en el árbol de trabajo: `goblin-archer` disponible en el editor con derivados de sus GIF; búsqueda de caminos hacia posiciones de ataque; exploración a más de siete casillas Manhattan de todos los enemigos vivos, con seis pasos sin dado; cofres manuales con tercios de arma compatible, poción o serpiente; dados habilitados animados y cámara más amplia centrada en el grupo cercano. La serpiente conserva un marcador provisional y las estadísticas siguen siendo de prueba. Las campañas existentes conservan sus enemigos y posiciones.
+
+PASÓ: TypeScript; 77 pruebas de paquetes con Vitest; 49 pruebas de servidor con PostgreSQL `umbral_test`, incluidas apertura/reintento de cofre y conservación de pasos de exploración; formato Prettier. Las pruebas de persistencia usan un enemigo cercano explícito para ejercitar combate y aciertos controlados para comprobar el D6 pendiente sin depender del azar. Dos pruebas independientes revisan objetivo alcanzable y rechazo de actor ajeno.
+
+PASÓ: E2E de Edge para colocar, exportar y reimportar el goblin arquero en el editor Vite. Se inspeccionó la captura. La comprobación visual aislada del componente real de dados verificó GIF cargado al habilitar D6/D20 y PNG al deshabilitar o reducir movimiento. No equivale a un recorrido completo de ataque multijugador.
+
+PASÓ: Docker reconstruyó web y servidor conservando PostgreSQL; `docker compose ps` muestra base y servidor saludables. La web, `/health/ready`, el spritesheet de ataque del goblin arquero y el GIF D6 respondieron HTTP 200. Playwright Edge cargó el tablero con dos controles y verificó el encuadre de cámara, exploración sin dado y dos pasos con seguimiento (dos E2E aprobados). La captura inicial del tablero fue inspeccionada.
+
+LIMITACIONES: `docs:check` detecta seis enlaces preexistentes rotos en `despliegue-render-gratuito.md`; contenido conserva el aviso previo de `object-5` inaccesible. No se ejecutaron pruebas de recuperación que interrumpen PostgreSQL ni dispositivos físicos. La suite histórica `demo.spec.ts` aún supone otro mapa e inicio con D6; no se usa como evidencia de esta entrega.
+Los logs del servidor aún registran `turn_timer_storage_error` intermitente al acceder a PostgreSQL con campañas previas activas; los dos E2E pasaron, pero esa lentitud requiere investigación antes de una partida extensa.
+
+## Resumen anterior
 
 | Área            | Estado observado                                                                                                                                                         |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

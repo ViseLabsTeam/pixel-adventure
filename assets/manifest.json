@@ -49,6 +49,12 @@
     }
   },
   "enemies": {
+    "goblin-archer": {
+      "source": "enemigos/goblin_archer/64x64 Goblin Archer Bow_idle_east.gif",
+      "attackSource": "enemigos/goblin_archer/64x64 Goblin Archer Bow_attack_east.gif",
+      "portrait": "enemigos/goblin_archer/generated/portrait.png",
+      "clips": "enemigos/goblin_archer/generated/animations.json"
+    },
     "goblin": {
       "source": "enemigos/goblin/Goblin_Enemy_32x32.gif",
       "attackSource": "enemigos/goblin/Goblin_Enemy_32x32_attack.gif",

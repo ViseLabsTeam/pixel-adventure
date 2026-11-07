@@ -138,7 +138,7 @@ export function Table({
   const movementLabel = movementRolling
     ? "DADOS GIRANDO"
     : game.phase === "MOVEMENT"
-      ? game.movementRoll === null
+      ? game.movementRoll === null && game.movementMode !== "EXPLORATION"
         ? "MOVIMIENTO · TIRADA PENDIENTE"
         : `MOVIMIENTO · ${game.movementLeft} CASILLAS`
       : connection.animating
@@ -168,7 +168,10 @@ export function Table({
 
       <header className="table-hud" aria-label="Estado de la mesa">
         <div className="table-turn-summary">
-          <span className="table-round">RONDA {game.round}</span>
+          <span className="table-round">
+            {game.encounterMode === "EXPLORATION" ? "EXPLORACIÓN · " : ""}RONDA{" "}
+            {game.round}
+          </span>
           <strong>
             {game.status === "WON"
               ? "ENCUENTRO COMPLETADO"

@@ -156,7 +156,7 @@ El servidor gobierna el límite de 20 segundos útiles de cada turno de jugador.
 
 Al comprobar la salida: primero se verifica si quedan personajes vivos. Si no queda ninguno, se aplica derrota; no se permite que una condición vacía de «todos los vivos cruzaron» avance una partida perdida. Si hay vivos y todos están esperando la salida, se realiza una única transición. Los muertos conservan su estado.
 
-La estructura exacta de exploración, pérdida de sigilo y retorno a combate depende de las reglas aún pendientes. Se implementa como política explícita, sin asumir movimiento libre simultáneo ni introducir acciones adicionales.
+La demo persiste `encounterMode`, `movementMode` y `movementSpent` para separar proximidad, asignación de movimiento del turno y pasos consumidos. Los campos opcionales permiten cargar snapshots anteriores; el servidor normaliza esos valores al procesar comandos. La exploración se activa sin enemigos vivos a distancia Manhattan menor o igual a siete de ningún jugador vivo, y concede seis pasos por turno sin tirada. La pérdida de sigilo y la percepción orientada siguen pendientes. Se implementa como política explícita, sin asumir movimiento libre simultáneo ni introducir acciones adicionales.
 
 ## 9. Contratos de comandos
 
@@ -189,7 +189,7 @@ Ejemplo conceptual de un movimiento:
 | `ACTIVATE_ALTAR` | Requisitos y costo de resurrección cuando se definan. |
 | `END_TURN` | Opción de omisión según el reglamento final. |
 
-Abrir cofres, transferir objetos y activar altares no se consideran acciones gratuitas por el hecho de figurar en esta tabla: sus costos siguen pendientes.
+En la demo, abrir cofres mediante `INTERACT` requiere adyacencia y consume la acción. Los costos definitivos de transferencias y altares siguen pendientes; esta tabla describe intenciones objetivo, no todos los nombres del protocolo implementado.
 
 Errores tipados: `NOT_YOUR_TURN`, `WRONG_PHASE`, `STALE_REVISION`, `OUT_OF_RANGE`, `BLOCKED_PATH`, `NO_MOVEMENT`, `ACTION_USED`, `INSUFFICIENT_RESOURCE`, `ITEM_NOT_OWNED`, `CHEST_ALREADY_RESOLVED`, `PLAYER_DEAD` y `WAITING_EXIT`. El cliente los traduce a mensajes claros.
 
@@ -230,7 +230,7 @@ Pared, hierba alta y pozo corresponden a las combinaciones de bloqueo acordadas.
 
 La posición autoritativa utiliza coordenadas enteras de casilla. El tablero convierte casillas a píxeles y anima el desplazamiento. La distancia, la percepción orientada y los algoritmos de línea de visión se concentran en el motor; se probarán especialmente esquinas y obstáculos.
 
-Al entrar en el encuentro, el tablero centra la cámara en el conjunto de jugadores presentes en sus casillas de aparición. El encuadre añade tres casillas visibles por eje respecto del encuadre efectivo anterior y, durante la exploración, mantiene el desplazamiento de cámara al acercarse el personaje activo al borde.
+Al entrar en el encuentro, el tablero centra la cámara en el conjunto de jugadores presentes en sus casillas de aparición. El encuadre añade seis casillas visibles por eje respecto del encuadre sin zoom y sigue suavemente el centro de los compañeros cercanos al jugador activo; los jugadores muy separados no sacan al activo de la vista.
 
 Definir antes de integrar arte: tamaño nativo del tile, tamaño de cada sprite, punto de apoyo, direcciones disponibles, nombres de animación, FPS y capas. El tamaño exacto sigue pendiente y debe acordarse con el equipo de arte.
 

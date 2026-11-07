@@ -2,7 +2,7 @@
 
 La interfaz usa [Pixel Operator](../assets/fuentes/pixel-operator/README.md), una fuente bitmap con variantes regular y negrita y licencia CC0 incluida. Es un recurso de UI separado de las imágenes de personajes y escenario contabilizadas abajo. La mesa usa además [cuatro sonidos originales](../assets/audio/README.md) generados para este proyecto.
 
-Revisión: **27 de octubre de 2026**. Alcance: archivos de imagen y audio presentes en el repositorio, metadatos e integración de demo. El **paladín es el conjunto completo de referencia**, según la indicación del responsable. Completo describe su catálogo recibido, no el balance definitivo.
+Revisión: **6 de noviembre de 2026**. Alcance: archivos de imagen y audio presentes en el repositorio, metadatos e integración de demo. El **paladín es el conjunto completo de referencia**, según la indicación del responsable. Completo describe su catálogo recibido, no el balance definitivo.
 
 ## Resumen actual
 
@@ -15,9 +15,10 @@ Revisión: **27 de octubre de 2026**. Alcance: archivos de imagen y audio presen
 | Escenario |              1 PNG | 1200 × 1200                | [Fondo recibido; grilla de demo implementada aparte](../assets/mapas/README.md).             |
 | Maestro   |              3 PNG | 1920 × 1080 (2) y 75 × 111 | [Guía integrado en las pantallas](../assets/maestro/README.md).                              |
 | Goblin    |              2 GIF | 32 × 32                    | [Reposo y ataque integrados](../assets/enemigos/goblin/README.md).                           |
+| Goblin arquero |         16 GIF | 320 × 320                  | [Reposo, movimiento y ataque preparados; proyectiles por asignar](../assets/enemigos/goblin_archer/README.md). |
 | Dados     |              2 GIF | 320 × 320                  | [D6 y D20 integrados en el control y la mesa](../assets/dados/README.md).                    |
 
-Total: **37 imágenes: 33 GIF y 4 PNG**, con **111.720.227 bytes, aproximadamente 106,54 MiB**, de archivos fuente. El tamaño corresponde a los originales, no a una descarga optimizada del juego.
+Total: **53 imágenes: 49 GIF y 4 PNG**, con **111.945.917 bytes, aproximadamente 106,76 MiB**, de archivos fuente. El tamaño corresponde a los originales, no a una descarga optimizada del juego.
 
 El [audio de la mesa](../assets/audio/README.md) consta de cuatro WAV mono de menos de un segundo: daño, equipar, desequipar y curarse. Proceden de un generador determinista propio, sin muestras de terceros; no forman parte del conteo de imágenes. Las partículas y los brillos de daño, equipo y poción se dibujan en Phaser y no requieren imágenes adicionales.
 
@@ -67,7 +68,7 @@ El mago dispone de `bola_de_fuego_.gif`, `ice.gif` y `zaaaaap.gif`, que muestran
 | Maestro                  | Sprite e ilustraciones recibidos; falta animación dedicada.                                                                                                                                                | Sprite estático integrado.                                                          |
 | Enemigos, cofres y zonas | Goblin: reposo y ataque recibidos e integrados. Otros enemigos, cofres y zonas siguen con marcadores Phaser.                                                                                               | Integración parcial de demo.                                                        |
 
-El [inventario del goblin](../assets/enemigos/goblin/README.md) registra los dos GIF recibidos y los derivados. Los [dados D6/D20](../assets/dados/README.md) están integrados en las tiradas móviles y en la presentación compartida de la mesa, con una pasada de 1,6 s y vistas estáticas derivadas para los botones.
+El [inventario del goblin](../assets/enemigos/goblin/README.md) registra los dos GIF recibidos y los derivados. El [goblin arquero](../assets/enemigos/goblin_archer/README.md) añade reposo, ataque y caminatas en tres ejes visuales; los proyectiles y variantes direccionales restantes están disponibles por asignar. La serpiente de los cofres usa un marcador provisional: no tiene arte propio recibido. Los [dados D6/D20](../assets/dados/README.md) están integrados en las tiradas móviles y en la presentación compartida de la mesa, con una pasada de 1,6 s y vistas estáticas derivadas para los botones.
 
 El editor de mapas permite colocar y mover apariciones del [catálogo de enemigos](../packages/content/enemy-recipes.json), incluidos tipos con marcador provisional. Las ubicaciones se guardan en `collision.json` y se generan para las partidas nuevas; colocar un enemigo no agrega archivos de arte ni aprueba habilidades. El [tutorial](tutorial-editor-mapas.md) describe la edición y la incorporación al juego.
 

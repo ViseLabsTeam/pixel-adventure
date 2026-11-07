@@ -20,6 +20,51 @@ async function cellPosition(page: Page, x: number, y: number) {
   );
 }
 
+test("agrega goblin archer y conserva su tipo al exportar e importar", async ({
+  page,
+}) => {
+  test.skip(!process.env.MAP_EDITOR_URL, "Requiere el editor local con Vite.");
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto(process.env.MAP_EDITOR_URL!);
+  const initial = JSON.parse(
+    await readFile("assets/mapas/collision.json", "utf8"),
+  );
+  await expect(page.locator("#status")).toContainText(
+    `${initial.enemies.length} enemigos`,
+  );
+  await page.locator("#json").setInputFiles({
+    name: "archer-map.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify({ ...initial, enemies: [] })),
+  });
+  await expect(page.locator("#status")).toContainText("0 enemigos");
+  await page.locator("#tool").selectOption("enemy");
+  await page.locator("#enemy-type").selectOption("goblin-archer");
+  const position = await cellPosition(page, -3, -3);
+  await page.mouse.click(position.x, position.y);
+  await expect(page.locator("#entity-id")).toHaveValue("goblin-archer-1");
+  await expect(page.locator("#entity-archetype")).toHaveValue("goblin-archer");
+  const download = page.waitForEvent("download");
+  await page.locator("#export").click();
+  const exported = JSON.parse(
+    await readFile((await (await download).path())!, "utf8"),
+  );
+  expect(exported.enemies).toEqual([
+    { id: "goblin-archer-1", archetypeId: "goblin-archer", x: -3, y: -3 },
+  ]);
+  await page.locator("#json").setInputFiles({
+    name: "archer-roundtrip.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify(exported)),
+  });
+  await page.locator("#enemy-list").selectOption("goblin-archer-1");
+  await expect(page.locator("#entity-archetype")).toHaveValue("goblin-archer");
+  await expect(page.locator("#entity-x")).toHaveValue("-3");
+  await page.screenshot({ path: "artifacts/map-editor-goblin-archer.png" });
+  expect(errors).toEqual([]);
+});
+
 test("edita enemigos, arrastra y conserva el JSON", async ({ page }) => {
   test.skip(!process.env.MAP_EDITOR_URL, "Requiere el editor local con Vite.");
   test.setTimeout(120_000);

@@ -9,7 +9,7 @@ Este documento consolida las decisiones de la conversación. Las reglas marcadas
 - Juego web cooperativo para entre dos y cuatro jugadores.
 - Diseñado principalmente para jugar presencialmente, todos en la misma habitación, con Internet.
 - Una notebook conectada al televisor muestra el tablero, personajes, enemigos, barras de vida y fases de la partida.
-- Al iniciar el encuentro, la cámara de la pantalla compartida se centra en los jugadores presentes en sus apariciones. Añade tres casillas visibles por eje al encuadre efectivo anterior y conserva el seguimiento durante la exploración.
+- Al iniciar el encuentro, la cámara de la pantalla compartida se centra en los jugadores presentes en sus apariciones. Añade seis casillas visibles por eje respecto del encuadre sin zoom y sigue el centro de los compañeros cercanos al jugador activo.
 - Cada celular presenta una tarjeta de personaje con estadísticas, ataques, dados habilitados cuando corresponde por turno, flechas e inventario. El personaje se desplaza solo en la pantalla compartida.
 - La salud aparece con una barra en el celular y junto al retrato del personaje en la pantalla compartida.
 - La demo debe incluir inicio, lobby, configuración y entrada a partida; las cifras actuales son valores de prueba.
@@ -59,7 +59,7 @@ Cada personaje dispone de dos casillas base más una bonificación determinada p
 | 3–4              |            1 |                3 |
 | 5–6              |            2 |                4 |
 
-Se mantiene la interpretación de una tirada de movimiento por turno, antes de moverse. La frecuencia exacta fuera del combate debe definirse.
+Se mantiene la interpretación de una tirada de movimiento por turno, antes de moverse. Confirmado el 06/11/2026: cuando no hay enemigos vivos a siete casillas alrededor de los jugadores vivos, se activa exploración con seis movimientos por turno sin tirar el dado. La demo utiliza distancia Manhattan para ese radio.
 
 - Movimiento por casillas en cuatro direcciones: arriba, abajo, izquierda y derecha.
 - Los personajes no se mueven en diagonal.
@@ -80,7 +80,7 @@ Se mantiene la interpretación de una tirada de movimiento por turno, antes de m
 - Métrica definitiva de la percepción enemiga y de futuras habilidades; el filtro de objetivos del control usa provisionalmente pasos horizontales y verticales.
 - Ocupación por enemigos, cuerpos de jugadores muertos y objetos interactivos.
 - Si los enemigos comparten las mismas restricciones de movimiento que los jugadores.
-- Movimiento y acciones durante exploración sin enemigos alertados.
+- Percepción orientada y sigilo; la exploración por proximidad conserva el orden de turnos y una acción.
 
 ## 4. Obstáculos y visión
 
@@ -229,7 +229,7 @@ El crítico está garantizado si el ataque inicial impacta; la tirada de impacto
 ### Confirmado
 
 - Al limpiar una sala, sus cofres pendientes se abren automáticamente y entregan botín bueno: no generan mímicos, serpientes, trampas ni otras consecuencias negativas.
-- Antes de limpiar la sala, abrir un cofre durante sigilo/exploración puede dar dos categorías de botín o una consecuencia negativa.
+- Confirmado el 06/11/2026: se pueden abrir cofres antes de matar a todos los enemigos. La apertura manual sortea armamento de la clase del personaje seleccionado que abre, poción o serpiente.
 - Las probabilidades descritas como 33 %, 33 % y 33 % se interpretan como tres resultados equiprobables de un tercio cada uno, para sumar el 100 %.
 - Botín posible: pociones, armas, piezas de armadura y otros ítems por definir.
 - Consecuencias negativas posibles: mímico, serpiente, trampa y otras por definir.
@@ -254,7 +254,7 @@ El crítico está garantizado si el ataque inicial impacta; la tirada de impacto
 
 - Cantidad, calidad y tabla del botín bueno entregado automáticamente tras limpiar la sala.
 - Reparto del botín automático y tratamiento de un inventario lleno.
-- Las dos categorías de recompensa y sus tablas internas.
+- Tablas y balance definitivos dentro del armamento y las pociones; la demo usa armas compatibles y pociones comunes del catálogo.
 - Si abrir un cofre y transferir objetos consumen una acción, y desde qué distancia se realizan.
 
 ## 11. Salas, stages, progresión y final

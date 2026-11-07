@@ -147,6 +147,8 @@ export interface GameView {
   status: "LOBBY" | "ACTIVE" | "WON" | "LOST";
   round: number;
   phase: "MOVEMENT" | "ACTION";
+  encounterMode?: "EXPLORATION" | "COMBAT";
+  movementMode?: "EXPLORATION" | "COMBAT";
   activePlayerId: string | null;
   movementRoll: number | null;
   movementLeft: number;
@@ -256,6 +258,8 @@ export const gameViewSchema: z.ZodType<GameView> = z.object({
   status: gameStatusSchema,
   round: nonnegative,
   phase: z.enum(["MOVEMENT", "ACTION"]),
+  encounterMode: z.enum(["EXPLORATION", "COMBAT"]).optional(),
+  movementMode: z.enum(["EXPLORATION", "COMBAT"]).optional(),
   activePlayerId: z.uuid().nullable(),
   movementRoll: z.number().int().min(1).max(6).nullable(),
   movementLeft: nonnegative,

@@ -21,6 +21,28 @@
     "range": 2,
     "movement": 1
   },
+  "goblin-archer": {
+    "name": "Goblin arquero",
+    "maxHp": 18,
+    "defense": 1,
+    "resistance": 1,
+    "accuracy": 5,
+    "dodge": 4,
+    "agility": 4,
+    "range": 3,
+    "movement": 1
+  },
+  "snake": {
+    "name": "Serpiente del cofre",
+    "maxHp": 12,
+    "defense": 0,
+    "resistance": 0,
+    "accuracy": 4,
+    "dodge": 4,
+    "agility": 4,
+    "range": 1,
+    "movement": 1
+  },
   "goblin": {
     "name": "Goblin de las ruinas",
     "maxHp": 20,

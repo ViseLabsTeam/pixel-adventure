@@ -15,6 +15,7 @@ const paths = [
   "mago/generated",
   "arquera/generated",
   "enemigos/goblin/generated",
+  "enemigos/goblin_archer/generated",
   "mapas/generated",
   "mapas/collision.json",
   "mapas/Scene_Overview.png",

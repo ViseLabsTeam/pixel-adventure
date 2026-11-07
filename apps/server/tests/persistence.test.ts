@@ -1,5 +1,19 @@
 import { beforeAll, afterAll, describe, it, expect, vi } from "vitest";
 import { randomUUID } from "node:crypto";
+// Persistence cases below exercise successful attacks, not hit probability
+// (covered by the deterministic core tests). Keep IDs and loot draws real.
+vi.mock("node:crypto", async (importOriginal) => {
+  const crypto = await importOriginal<typeof import("node:crypto")>();
+  return {
+    ...crypto,
+    randomInt: (min: number, max?: number) =>
+      min === 1 && max === 101
+        ? 1
+        : max === undefined
+          ? crypto.randomInt(min)
+          : crypto.randomInt(min, max),
+  };
+});
 process.env.DATABASE_URL =
   process.env.TEST_DATABASE_URL ??
   "postgres://umbral:umbral_local@127.0.0.1:5434/umbral_test";
@@ -9,6 +23,87 @@ const { pool, validateSave } = await import("../src/persistence/database");
 const { migrate } = await import("../src/persistence/migrate");
 const api = await import("../src/application/campaigns");
 const campaigns: string[] = [];
+it("persiste la apertura arriesgada y recupera el resultado sin duplicar botín o serpiente", async () => {
+  const f = await setup();
+  const game = await api.readGame(f.host.session.campaignId);
+  game.chests = [
+    {
+      id: "risk-chest",
+      x: game.players[0].x + 1,
+      y: game.players[0].y,
+      opened: false,
+      itemDefinition: "potion",
+    },
+  ];
+  await pool.query("UPDATE campaigns SET snapshot=$1 WHERE id=$2", [
+    JSON.stringify(game),
+    game.id,
+  ]);
+  const request = {
+    commandId: randomUUID(),
+    expectedRevision: game.revision,
+    action: { type: "INTERACT", targetId: "risk-chest" },
+  };
+  const receipt = await api.execute(f.one.token, request, f.online);
+  const after = await api.readGame(game.id);
+  expect(after.chests[0].opened).toBe(true);
+  expect(after.actionUsed).toBe(true);
+  const loot = after.chests[0].lootId;
+  if (loot) {
+    const { prototype } = await import("@umbral/content/prototype");
+    expect(
+      prototype.items[after.items[loot].definitionId].allowedClasses,
+    ).toContain("paladin");
+  } else {
+    expect(
+      after.enemies.filter(
+        (enemy) => enemy.id === `${game.id}:risk-chest:snake`,
+      ),
+    ).toHaveLength(1);
+  }
+  expect(await api.execute(f.one.token, request, f.online)).toEqual(receipt);
+  expect(await api.readGame(game.id)).toEqual(after);
+});
+it("conserva seis pasos de exploración y su consumo al recuperar el snapshot", async () => {
+  const f = await setup();
+  const game = await api.readGame(f.host.session.campaignId);
+  game.enemies = [];
+  await pool.query("UPDATE campaigns SET snapshot=$1 WHERE id=$2", [
+    JSON.stringify(game),
+    game.id,
+  ]);
+  await api.execute(
+    f.one.token,
+    {
+      commandId: randomUUID(),
+      expectedRevision: game.revision,
+      action: { type: "END_TURN" },
+    },
+    f.online,
+  );
+  const next = await api.readGame(game.id);
+  expect(next).toMatchObject({
+    encounterMode: "EXPLORATION",
+    movementMode: "EXPLORATION",
+    movementLeft: 6,
+    movementSpent: 0,
+    movementRoll: null,
+  });
+  const request = {
+    commandId: randomUUID(),
+    expectedRevision: next.revision,
+    action: { type: "MOVE_STEP", direction: "LEFT" },
+  };
+  const receipt = await api.execute(f.two.token, request, f.online);
+  const moved = await api.readGame(game.id);
+  expect(moved).toMatchObject({
+    movementLeft: 5,
+    movementSpent: 1,
+    movementRoll: null,
+  });
+  expect(await api.execute(f.two.token, request, f.online)).toEqual(receipt);
+  expect(await api.readGame(game.id)).toEqual(moved);
+});
 it("guarda el descarte y recupera su recibo sin ejecutarlo dos veces", async () => {
   const f = await setup();
   const game = await api.readGame(f.host.session.campaignId);
@@ -588,6 +683,19 @@ async function setup() {
     })
   ).session;
   const online = [one.playerId!, two.playerId!];
+  // These persistence fixtures exercise combat rolls; the real map may start
+  // in exploration. Put a living enemy within the encounter radius explicitly.
+  const lobby = await api.readGame(host.session.campaignId);
+  lobby.enemies.push({
+    ...lobby.enemies[0],
+    id: "combat-fixture",
+    x: lobby.players[0].x + 5,
+    y: lobby.players[0].y,
+  });
+  await pool.query("UPDATE campaigns SET snapshot=$1 WHERE id=$2", [
+    JSON.stringify(lobby),
+    lobby.id,
+  ]);
   await api.execute(
     host.session.token,
     { commandId: randomUUID(), expectedRevision: 2, action: { type: "START" } },

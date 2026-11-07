@@ -5,7 +5,7 @@ type Point = { x: number; y: number };
 type Size = { width: number; height: number };
 type ScrollRange = { minX: number; maxX: number; minY: number; maxY: number };
 
-export function zoomForExtraTiles(viewport: Size, extraTiles = 3) {
+export function zoomForExtraTiles(viewport: Size, extraTiles = 6) {
   if (viewport.width <= 0 || viewport.height <= 0) return 1;
   return Math.min(
     viewport.width / (viewport.width + extraTiles * TILE_SIZE),
@@ -27,9 +27,36 @@ export function tileCenter(point: Point): Point {
 export function tileGroupCenter(points: readonly Point[]): Point | null {
   if (!points.length) return null;
   return {
-    x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
-    y: points.reduce((sum, point) => sum + point.y, 0) / points.length,
+    x:
+      (Math.min(...points.map((p) => p.x)) +
+        Math.max(...points.map((p) => p.x))) /
+      2,
+    y:
+      (Math.min(...points.map((p) => p.y)) +
+        Math.max(...points.map((p) => p.y))) /
+      2,
   };
+}
+
+// Keep a separated active player visible while framing nearby companions with
+// three tiles of context on each side.
+export function nearbyGroupFocus(
+  points: readonly Point[],
+  active: Point,
+  viewport: Size,
+): Point {
+  const radiusX = Math.max(0, viewport.width / TILE_SIZE / 2 - 3);
+  const radiusY = Math.max(0, viewport.height / TILE_SIZE / 2 - 3);
+  return (
+    tileGroupCenter([
+      active,
+      ...points.filter(
+        (point) =>
+          Math.abs(point.x - active.x) <= radiusX &&
+          Math.abs(point.y - active.y) <= radiusY,
+      ),
+    ]) ?? active
+  );
 }
 
 export function initialFocusTile(
@@ -105,23 +132,9 @@ export function followScroll(
   zoom: number,
   range: ScrollRange,
 ): Point {
-  const margin =
-    Math.min(125, (viewport.width * zoom) / 4, (viewport.height * zoom) / 4) /
-    zoom;
-  const next = (position: number, scroll: number, size: number) =>
-    position < scroll + margin
-      ? position - margin
-      : position > scroll + size - margin
-        ? position - size + margin
-        : scroll;
+  const centered = centeredScroll(target, viewport);
   return {
-    x: Math.min(
-      range.maxX,
-      Math.max(range.minX, next(target.x, current.x, viewport.width)),
-    ),
-    y: Math.min(
-      range.maxY,
-      Math.max(range.minY, next(target.y, current.y, viewport.height)),
-    ),
+    x: Math.min(range.maxX, Math.max(range.minX, centered.x)),
+    y: Math.min(range.maxY, Math.max(range.minY, centered.y)),
   };
 }

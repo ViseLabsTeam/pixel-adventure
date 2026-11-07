@@ -21,6 +21,7 @@ import {
   centeredScroll,
   followScroll,
   initialFocusTile,
+  nearbyGroupFocus,
   scrollToWorldOrigin,
   tileCenter,
   worldOriginToScroll,
@@ -287,7 +288,7 @@ class Courtyard extends Phaser.Scene {
       },
     });
   }
-  moveCamera(x: number, y: number, duration = 0) {
+  moveCamera(x: number, y: number, duration = 350) {
     const camera = this.cameras.main;
     const viewport = worldViewport(camera, camera.zoom);
     const range = cameraScrollRange(
@@ -296,7 +297,13 @@ class Courtyard extends Phaser.Scene {
       this.initialCameraCenter,
     );
     const nextOrigin = followScroll(
-      tileCenter({ x, y }),
+      tileCenter(
+        nearbyGroupFocus(
+          this.snapshot.players.filter((player) => player.hp > 0),
+          { x, y },
+          viewport,
+        ),
+      ),
       scrollToWorldOrigin(
         { x: camera.scrollX, y: camera.scrollY },
         camera,
@@ -817,30 +824,35 @@ class Courtyard extends Phaser.Scene {
       const previous = this.positions.get(entity.id);
       this.positions.set(entity.id, { x: entity.x, y: entity.y });
       if (previous && (previous.x !== entity.x || previous.y !== entity.y)) {
-        const clips = player ? actorArt[entity.classId].clips : null;
+        const artId = player
+          ? entity.classId
+          : entity.archetypeId in actorArt
+            ? (entity.archetypeId as ActorArtId)
+            : null;
+        const clips = artId ? actorArt[artId].clips : null;
         const walkAction =
-          player && entity.y < previous.y && clips && "walkUp" in clips
+          entity.y < previous.y && clips && "walkUp" in clips
             ? "walkUp"
-            : player && entity.y > previous.y && clips && "walkDown" in clips
+            : entity.y > previous.y && clips && "walkDown" in clips
               ? "walkDown"
-              : player && clips && "walk" in clips
+              : clips && "walk" in clips
                 ? "walk"
                 : "idle";
         const moveDuration = movementStepMs;
         movementDurations.set(entity.id, moveDuration);
         if (entity.id === state.activePlayerId) cameraDuration = moveDuration;
         this.face(actor, previous.x, entity.x);
-        if (player) {
-          this.animate(actor, entity.classId, walkAction);
+        if (artId) {
+          this.animate(actor, artId, walkAction);
           const sprite = actor.getByName("sprite") as Phaser.GameObjects.Sprite;
           if (
             walkAction !== "idle" &&
             sprite.anims.isPlaying &&
-            sprite.anims.currentAnim?.key === entity.classId + "-" + walkAction
+            sprite.anims.currentAnim?.key === artId + "-" + walkAction
           ) {
             const clipDone = this.beginVisual();
             sprite.once("animationcomplete", () => {
-              this.idle(actor!, entity.classId);
+              this.idle(actor!, artId);
               clipDone();
             });
           }
@@ -935,7 +947,7 @@ class Courtyard extends Phaser.Scene {
         highlights.lineStyle(2, 0xe88c7d, 0.95).strokeCircle(x, y, 29);
       }
     }
-    if (active) this.moveCamera(active.x, active.y, cameraDuration);
+    if (active) this.moveCamera(active.x, active.y, cameraDuration || 350);
     const stagedHp = new Map<string, number>();
     let attackDelay = movementDurations.size ? movementStepMs : 0;
     for (const event of state.events) {

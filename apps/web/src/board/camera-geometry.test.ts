@@ -5,6 +5,7 @@ import {
   centeredScroll,
   followScroll,
   initialFocusTile,
+  nearbyGroupFocus,
   scrollToWorldOrigin,
   tileCenter,
   worldOriginToScroll,
@@ -21,7 +22,7 @@ const spawns = [
 ];
 
 describe("cámara de la mesa", () => {
-  it("muestra por lo menos tres casillas extra en ambos ejes al cambiar el tamaño", () => {
+  it("muestra por lo menos seis casillas extra en ambos ejes al cambiar el tamaño", () => {
     for (const size of [
       { width: 1109, height: 900 },
       { width: 800, height: 1200 },
@@ -30,10 +31,10 @@ describe("cámara de la mesa", () => {
       const zoom = zoomForExtraTiles(size);
       const visible = worldViewport(size, zoom);
       expect(visible.width / TILE_SIZE).toBeGreaterThanOrEqual(
-        size.width / TILE_SIZE + 3 - 1e-10,
+        size.width / TILE_SIZE + 6 - 1e-10,
       );
       expect(visible.height / TILE_SIZE).toBeGreaterThanOrEqual(
-        size.height / TILE_SIZE + 3 - 1e-10,
+        size.height / TILE_SIZE + 6 - 1e-10,
       );
     }
   });
@@ -45,8 +46,8 @@ describe("cámara de la mesa", () => {
       slot,
     }));
     const initial = initialFocusTile(players, spawns, "player-0", 1);
-    expect(initial?.x).toBe(10);
-    expect(initial?.y).toBeCloseTo(-17.3333333333);
+    expect(initial?.x).toBe(10.5);
+    expect(initial?.y).toBe(-17);
     const moved = players.map((player) =>
       player.id === "player-1" ? { ...player, x: 16 } : player,
     );
@@ -79,7 +80,9 @@ describe("cámara de la mesa", () => {
       zoom,
       range,
     );
-    expect(near).toEqual(centered);
+    expect(near.x + viewport.width / 2).toBeCloseTo(
+      tileCenter({ x: 12, y: -16 }).x,
+    );
     const explored = followScroll(
       tileCenter({ x: 30, y: 30 }),
       near,
@@ -98,5 +101,21 @@ describe("cámara de la mesa", () => {
     );
     expect(edge.x).toBeLessThanOrEqual(range.maxX);
     expect(edge.y).toBeLessThanOrEqual(range.maxY);
+  });
+
+  it("centra compañeros cercanos sin perder al activo por jugadores separados", () => {
+    const active = { x: 10, y: 10 };
+    expect(
+      nearbyGroupFocus([active, { x: 14, y: 12 }, { x: -40, y: -40 }], active, {
+        width: 1400,
+        height: 1400,
+      }),
+    ).toEqual({ x: 12, y: 11 });
+    expect(
+      nearbyGroupFocus([{ x: -40, y: -40 }], active, {
+        width: 1400,
+        height: 1400,
+      }),
+    ).toEqual(active);
   });
 });

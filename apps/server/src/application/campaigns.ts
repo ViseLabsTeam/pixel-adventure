@@ -595,6 +595,8 @@ export function projectView(
     status: game.status,
     round: game.round,
     phase: game.phase,
+    encounterMode: game.encounterMode ?? "COMBAT",
+    movementMode: game.movementMode ?? "COMBAT",
     activePlayerId: game.activePlayerId,
     movementRoll: game.movementRoll,
     movementLeft: game.movementLeft,

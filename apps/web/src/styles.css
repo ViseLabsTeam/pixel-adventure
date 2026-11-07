@@ -3711,6 +3711,10 @@ footer {
   transform: scale(1.08);
   filter: drop-shadow(0 0 8px #eecb7d);
 }
+.controller .movement-panel .dice-button:not(:disabled) img,
+.attack-die:not(:disabled) img {
+  filter: drop-shadow(0 0 7px #eecb7d);
+}
 .controller .movement-panel .dice-button:disabled,
 .attack-die:disabled {
   opacity: 0.42;

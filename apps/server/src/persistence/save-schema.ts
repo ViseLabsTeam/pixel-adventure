@@ -43,9 +43,12 @@ export const saveSchema = z.object({
   status: z.enum(["LOBBY", "ACTIVE", "WON", "LOST"]),
   round: integer,
   phase: z.enum(["MOVEMENT", "ACTION"]),
+  encounterMode: z.enum(["EXPLORATION", "COMBAT"]).optional(),
+  movementMode: z.enum(["EXPLORATION", "COMBAT"]).optional(),
+  movementSpent: integer.max(6).optional(),
   activePlayerId: z.string().nullable(),
   movementRoll: z.number().int().min(1).max(6).nullable(),
-  movementLeft: integer.max(4),
+  movementLeft: integer.max(6),
   actionUsed: z.boolean(),
   players: z
     .array(

@@ -37,6 +37,13 @@ export const animationTimings = {
     special: 4050,
     ultimate: 8050,
   },
+  "goblin-archer": {
+    idle: 480,
+    basic: 750,
+    walk: 2000,
+    walkUp: 2000,
+    walkDown: 2000,
+  },
   goblin: {
     idle: 640,
     basic: 440,

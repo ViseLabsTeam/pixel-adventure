@@ -88,7 +88,9 @@ describe("eventos confirmados para efectos de la mesa", () => {
       prototype,
       () => 1,
     );
-    expect(healed.events.at(-1)).toMatchObject({
+    expect(
+      [...healed.events].reverse().find((event) => event.kind === "HEAL"),
+    ).toMatchObject({
       kind: "HEAL",
       actorId: "one",
       source: "FOUNTAIN",

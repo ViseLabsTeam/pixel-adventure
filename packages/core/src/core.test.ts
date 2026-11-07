@@ -18,6 +18,13 @@ function setup() {
   let game = createGame("campaign", "ABC234", prototype);
   game = addPlayer(game, "one", "Ada", "paladin", prototype);
   game = addPlayer(game, "two", "Bea", "mage", prototype);
+  // These tests exercise combat dice independently of the map's starting distance.
+  game.enemies.push({
+    ...game.enemies[0],
+    id: "nearby-fixture",
+    x: game.players[1].x + 3,
+    y: game.players[1].y,
+  });
   return resolve(game, null, { type: "START" }, prototype, () => 1);
 }
 const roll = (game: Game, sides = 6) =>

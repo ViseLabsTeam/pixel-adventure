@@ -1,0 +1,120 @@
+{
+  "idle": {
+    "count": 4,
+    "delays": [
+      120,
+      120,
+      120,
+      120
+    ],
+    "duration": 480,
+    "originX": 0.46875,
+    "originY": 0.90625,
+    "scale": 0.5833333333333334,
+    "source": "64x64 Goblin Archer Bow_idle_east.gif",
+    "indices": [
+      0,
+      1,
+      2,
+      3
+    ]
+  },
+  "basic": {
+    "count": 7,
+    "delays": [
+      100,
+      100,
+      200,
+      60,
+      90,
+      100,
+      100
+    ],
+    "duration": 750,
+    "originX": 0.4921875,
+    "originY": 0.90625,
+    "scale": 0.5833333333333334,
+    "source": "64x64 Goblin Archer Bow_attack_east.gif",
+    "indices": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ]
+  },
+  "walk": {
+    "count": 6,
+    "delays": [
+      333,
+      333,
+      333,
+      333,
+      333,
+      335
+    ],
+    "duration": 2000,
+    "originX": 0.46875,
+    "originY": 0.90625,
+    "scale": 0.5833333333333334,
+    "source": "64x64 Goblin Archer Bow_move_east.gif",
+    "indices": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ]
+  },
+  "walkUp": {
+    "count": 6,
+    "delays": [
+      333,
+      333,
+      333,
+      333,
+      333,
+      335
+    ],
+    "duration": 2000,
+    "originX": 0.5,
+    "originY": 0.90625,
+    "scale": 0.5833333333333334,
+    "source": "64x64 Goblin Archer Bow_move_north.gif",
+    "indices": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ]
+  },
+  "walkDown": {
+    "count": 6,
+    "delays": [
+      333,
+      333,
+      333,
+      333,
+      333,
+      335
+    ],
+    "duration": 2000,
+    "originX": 0.5,
+    "originY": 0.90625,
+    "scale": 0.5833333333333334,
+    "source": "64x64 Goblin Archer Bow_move_south.gif",
+    "indices": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ]
+  }
+}

@@ -39,7 +39,7 @@ La instalación de paquetes o las pantallas estáticas por sí solas no cumplen 
 | Integridad   | Identificadores de comandos y objetos; un reintento recupera el mismo resultado.                                                                                                                            |
 | Reconexión   | Recuperar el mismo personaje al recargar o perder conexión, y bloquear sus controles mientras esté offline.                                                                                                 |
 
-El encuentro puede comenzar ya en combate mediante un preset de desarrollo. No es necesario cerrar el comportamiento de exploración y alarma para comprobar esta primera integración. El preset debe estar identificado como escena de prueba.
+El preset de desarrollo alterna combate y exploración según proximidad: sin enemigos vivos a siete casillas Manhattan de los jugadores vivos, concede seis pasos por turno sin tirar movimiento. No es necesario cerrar percepción orientada, sigilo y alarma para comprobar esta integración. El preset debe estar identificado como escena de prueba.
 
 La solicitud posterior amplía el inventario a cuatro espacios de bolsa y ranuras de casco, pechera, arma y botas (actualización del responsable del 20/10/2026). Deben ser objetos looteables que solo modifican estadísticas. La primera entrega no necesita completar el catálogo ni habilitar transferencias cuyo costo de acción aún está pendiente.
 

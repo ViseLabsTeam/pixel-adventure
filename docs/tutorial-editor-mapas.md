@@ -35,7 +35,7 @@ Para volver a dibujar una copa, seleccioná el árbol y pulsá **Reiniciar silue
 
 **Ubicar aparición:** seleccioná el número de jugador (1 a 4) y hacé clic en una casilla libre. Repetí para los cuatro. Una nueva marca del mismo número reemplaza la anterior.
 
-**Ubicar cofre:** hacé clic en una casilla para crearlo. El editor asigna un ID (`chest-5`, por ejemplo) y muestra sus datos en la fila **Objeto**. Allí podés cambiar el ID y el identificador del objeto que entrega, por ejemplo `potion` o `iron-helmet`. Hacé clic sobre un cofre existente para seleccionarlo. Los cofres de esta demo entregan su botín al terminar el combate; su interacción actual permite recoger botín que haya quedado en el suelo.
+**Ubicar cofre:** hacé clic en una casilla para crearlo. El editor asigna un ID (`chest-5`, por ejemplo) y muestra sus datos en la fila **Objeto**. Allí podés cambiar el ID y el identificador del objeto que entrega, por ejemplo `potion` o `iron-helmet`. Hacé clic sobre un cofre existente para seleccionarlo. El objeto configurado es el botín bueno de la apertura automática al limpiar. Antes de limpiar se pueden abrir manualmente: sortean un arma compatible con quien abre, poción o serpiente por tercios; también permiten recoger un objeto pendiente.
 
 La lista **Objeto** lee el [catálogo del juego](../packages/content/src/items.ts) e indica las clases compatibles. Por ejemplo: `archer-bow` entrega un arco solo a la arquera, `mage-staff` un bastón solo al mago y `mage-travel-boots` botas solo al mago. Un paladín no puede recibirlos ni guardarlos en la bolsa. Si no hay un personaje compatible con espacio al abrir el cofre, el botín espera allí. `potion` sigue siendo común a todas las clases. La misma restricción rige para las recompensas de interactuables.
 
@@ -48,7 +48,7 @@ Un borde rojo alrededor de una aparición o cofre indica que está sobre una cas
 ## 4. Agregar y mover enemigos
 
 1. Elegí **Ubicar / arrastrar enemigo** y seleccioná el tipo en **Enemigo a agregar**. El selector usa el [catálogo de enemigos](../packages/content/enemy-recipes.json), compartido con el juego. Actualmente incluye Centinela del umbral, Eco errante y Goblin de las ruinas.
-2. Hacé clic en una casilla para agregarlo. Cada aparición recibe un ID propio, por ejemplo `goblin-1`; podés colocar varios del mismo tipo. Los marcadores `E` de color salmón son enemigos.
+2. Hacé clic en una casilla para agregarlo. El selector incluye **Goblin arquero** (`goblin-archer`), con alcance de prueba de tres casillas y animaciones de reposo, movimiento y ataque. Agregarlo al catálogo no cambia las apariciones de mapas o campañas existentes. Cada aparición recibe un ID propio, por ejemplo `goblin-1`; podés colocar varios del mismo tipo. Los marcadores `E` de color salmón son enemigos.
 3. Para moverlo, arrastrá su marcador con esa herramienta. También podés seleccionarlo en **Enemigos del mapa**: el editor centra la vista y muestra sus datos. Editá **X** e **Y**, incluso negativos, o usá **Mover punto seleccionado** y hacé clic en el destino.
 4. El campo **Enemigo** de la fila de edición cambia el tipo de la aparición seleccionada; **Enemigo a agregar** elige el tipo para las próximas apariciones. **Eliminar punto** borra solo el seleccionado.
 

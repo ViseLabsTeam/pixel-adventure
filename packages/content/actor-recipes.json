@@ -58,6 +58,18 @@
     }
   },
   "enemies": {
+    "goblin-archer": {
+      "folder": "enemigos/goblin_archer",
+      "portraitSource": "64x64 Goblin Archer Bow_idle_east.gif",
+      "height": 84,
+      "clips": {
+        "idle": "64x64 Goblin Archer Bow_idle_east.gif",
+        "basic": "64x64 Goblin Archer Bow_attack_east.gif",
+        "walk": "64x64 Goblin Archer Bow_move_east.gif",
+        "walkUp": "64x64 Goblin Archer Bow_move_north.gif",
+        "walkDown": "64x64 Goblin Archer Bow_move_south.gif"
+      }
+    },
     "goblin": {
       "folder": "enemigos/goblin",
       "portraitSource": "Goblin_Enemy_32x32.gif",

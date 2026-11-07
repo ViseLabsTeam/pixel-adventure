@@ -25,6 +25,26 @@ describe("recetas de actores", () => {
     expect(second.archetypeId).toBe("goblin");
     expect(first.maxHp).toBe(second.maxHp);
   });
+  it("crea al goblin arquero con alcance y caminatas propios", () => {
+    const enemy = spawnEnemy("goblin-archer", 3, 4, "archer-a");
+    expect(enemy).toMatchObject({
+      id: "archer-a",
+      archetypeId: "goblin-archer",
+      range: 3,
+      x: 3,
+      y: 4,
+    });
+    expect(actorRecipes.enemies["goblin-archer"].clips.walkUp).toContain(
+      "north",
+    );
+    expect(actorRecipes.enemies["goblin-archer"].clips.walkDown).toContain(
+      "south",
+    );
+    for (const action of ["walk", "walkUp", "walkDown"] as const)
+      expect(animationTimings["goblin-archer"][action]).toBe(movementStepMs);
+    expect(prototype.chestSnake.archetypeId).toBe("snake");
+    expect(prototype.chestSnake.hp).toBeGreaterThan(0);
+  });
   it("usa los IDs, tipos y coordenadas del mapa para las apariciones", () => {
     expect(
       prototype.enemies.map(({ id, archetypeId, x, y }) => ({

@@ -68,7 +68,10 @@ for (const [id, value] of Object.entries(classes)) {
   ])
     assert(Number.isInteger(score) && score >= 0 && score <= 10);
 }
-for (const recipe of Object.values(actorRecipes.players)) {
+for (const recipe of Object.values({
+  ...actorRecipes.players,
+  ...actorRecipes.enemies,
+})) {
   const clips = JSON.parse(
     await readFile(`assets/${recipe.folder}/generated/animations.json`, "utf8"),
   ) as Record<string, { duration: number; delays: number[] }>;

@@ -4,6 +4,12 @@ import recipes from "./enemy-recipes.json";
 import legacy from "../../assets/mapas/legacy-enemies.json";
 
 describe("enemigos del mapa", () => {
+  it("permite colocar un goblin arquero del catálogo en el editor", () => {
+    const input = [
+      { id: "goblin-archer-1", archetypeId: "goblin-archer", x: 2, y: 3 },
+    ];
+    expect(readMapEnemies(input, recipes, legacy)).toEqual(input);
+  });
   it("conserva enemigos de JSON antiguos y respeta una lista vacía explícita", () => {
     const enemies = readMapEnemies(undefined, recipes, legacy);
     expect(enemies).toEqual(legacy);

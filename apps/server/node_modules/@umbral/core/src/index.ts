@@ -105,6 +105,7 @@ export interface Content {
     spawns: Point[];
   };
   enemies: Enemy[];
+  chestSnake?: Omit<Enemy, "id" | "x" | "y">;
   chests: Chest[];
   interactables: Interactable[];
   zones: Zone[];
@@ -166,6 +167,9 @@ export interface Game {
   status: "LOBBY" | "ACTIVE" | "WON" | "LOST";
   round: number;
   phase: "MOVEMENT" | "ACTION";
+  encounterMode?: "EXPLORATION" | "COMBAT";
+  movementMode?: "EXPLORATION" | "COMBAT";
+  movementSpent?: number;
   activePlayerId: string | null;
   movementRoll: number | null;
   movementLeft: number;
@@ -525,34 +529,206 @@ function safeLoot(game: Game, content: Content) {
     );
   }
 }
+function neighbors(p: Point): Point[] {
+  return [
+    { x: p.x + 1, y: p.y },
+    { x: p.x - 1, y: p.y },
+    { x: p.x, y: p.y + 1 },
+    { x: p.x, y: p.y - 1 },
+  ];
+}
+const pointKey = (p: Point) => `${p.x},${p.y}`;
+
+// Search attack positions, not the occupied target tile. Breadth-first search
+// may temporarily increase distance to get around walls or another actor.
+function enemyRoute(game: Game, content: Content, enemy: Enemy) {
+  const targets = game.players
+    .filter((p) => p.hp > 0)
+    .sort((a, b) => a.slot - b.slot);
+  const blocked = new Set(
+    [
+      ...game.map.walls,
+      ...game.chests,
+      ...game.players.filter((p) => p.hp > 0),
+      ...game.enemies.filter((e) => e.hp > 0 && e.id !== enemy.id),
+    ].map(pointKey),
+  );
+  const queue: { point: Point; parent: number }[] = [
+    { point: enemy, parent: -1 },
+  ];
+  const visited = new Set([pointKey(enemy)]);
+  for (let head = 0; head < queue.length; head++) {
+    const node = queue[head];
+    const target = targets.find(
+      (p) =>
+        distance(node.point, p) <= enemy.range &&
+        clearPath(game, node.point, p),
+    );
+    if (target) {
+      const path: Point[] = [];
+      for (
+        let cursor = head;
+        queue[cursor].parent !== -1;
+        cursor = queue[cursor].parent
+      )
+        path.push(queue[cursor].point);
+      return { target, path: path.reverse() };
+    }
+    for (const point of neighbors(node.point)) {
+      const key = pointKey(point);
+      if (
+        visited.has(key) ||
+        blocked.has(key) ||
+        point.x < game.map.minX ||
+        point.y < game.map.minY ||
+        point.x >= game.map.minX + game.map.width ||
+        point.y >= game.map.minY + game.map.height ||
+        content.map.terrain[point.y - game.map.minY]?.[
+          point.x - game.map.minX
+        ] !== "1"
+      )
+        continue;
+      visited.add(key);
+      queue.push({ point, parent: head });
+    }
+  }
+  return null;
+}
+
+function updateEncounter(game: Game, newTurn = false) {
+  const mode = game.enemies.some(
+    (enemy) =>
+      enemy.hp > 0 &&
+      game.players.some(
+        (player) => player.hp > 0 && distance(enemy, player) <= 7,
+      ),
+  )
+    ? "COMBAT"
+    : "EXPLORATION";
+  const previous = game.encounterMode;
+  game.encounterMode = mode;
+  if (newTurn) {
+    game.movementSpent = 0;
+    game.movementMode = mode;
+    game.movementLeft = mode === "EXPLORATION" ? 6 : 0;
+  } else if (game.phase === "MOVEMENT" && !game.actionUsed) {
+    const spent =
+      game.movementSpent ??
+      (game.movementRoll === null
+        ? 0
+        : Math.max(0, movementTotal(game.movementRoll) - game.movementLeft));
+    game.movementSpent = spent;
+    if (mode === "EXPLORATION") {
+      game.movementMode = "EXPLORATION";
+      game.movementLeft = Math.max(0, 6 - spent);
+    } else if (game.movementMode === "EXPLORATION") {
+      game.movementLeft = Math.min(game.movementLeft, Math.max(0, 4 - spent));
+    }
+  }
+  if (previous && previous !== mode)
+    addEvent(
+      game,
+      "ENCOUNTER",
+      mode === "EXPLORATION"
+        ? "Exploración: seis movimientos por turno sin tirar el dado."
+        : "Hay enemigos cerca: comienza el combate.",
+    );
+}
+
+function openChest(
+  game: Game,
+  player: Player,
+  chest: Chest,
+  content: Content,
+  dice: Dice,
+) {
+  const weapons = Object.keys(content.items).filter(
+    (id) =>
+      content.items[id].slot === "weapon" &&
+      canOwnItem(content, id, player.classId),
+  );
+  const potions = Object.keys(content.items).filter(
+    (id) =>
+      content.items[id].slot === null &&
+      (content.items[id].heal > 0 || content.items[id].restoreResource > 0) &&
+      canOwnItem(content, id, player.classId),
+  );
+  requireRule(
+    content.chestSnake && weapons.length && potions.length,
+    "CHEST_CONTENT_UNAVAILABLE",
+    "El contenido del cofre no está disponible.",
+  );
+  // Validate every possible outcome before drawing so an impossible spawn
+  // cannot let a caller retry the random choice until receiving an item.
+  let snakePosition: Point | undefined;
+  let nearest = Infinity;
+  for (let y = game.map.minY; y < game.map.minY + game.map.height; y++) {
+    for (let x = game.map.minX; x < game.map.minX + game.map.width; x++) {
+      const point = { x, y };
+      const steps = distance(chest, point);
+      if (steps < nearest && passable(game, content, point, "")) {
+        snakePosition = point;
+        nearest = steps;
+      }
+    }
+  }
+  requireRule(
+    snakePosition,
+    "NO_SPAWN_SPACE",
+    "No hay espacio para resolver el cofre.",
+  );
+  consumeAction(game);
+  const outcome = dice(3);
+  chest.opened = true;
+  if (outcome === 3) {
+    game.enemies.push({
+      ...content.chestSnake,
+      ...snakePosition,
+      id: `${game.id}:${chest.id}:snake`,
+    });
+    addEvent(
+      game,
+      "CHEST",
+      `${player.name} abre el cofre y aparece una serpiente.`,
+      undefined,
+      { actorId: player.id, targetId: chest.id },
+    );
+    return;
+  }
+  const candidates = outcome === 1 ? weapons : potions;
+  const definitionId =
+    candidates.length === 1
+      ? candidates[0]
+      : candidates[dice(candidates.length) - 1];
+  chest.itemDefinition = definitionId;
+  const id = `${game.id}:${chest.id}:loot`;
+  chest.lootId = id;
+  if (itemSlots(player, content.items[definitionId].slot).includes(null)) {
+    giveItem(game, player, id, definitionId, content);
+    addEvent(game, "LOOT", `${player.name} recibe ${game.items[id].name}.`);
+  } else {
+    game.items[id] = {
+      id,
+      definitionId,
+      ownerId: "",
+      ...itemProperties(content, definitionId),
+    };
+    addEvent(
+      game,
+      "LOOT",
+      "El botín espera junto al cofre: no hay espacio disponible.",
+    );
+  }
+}
 function enemyPhase(game: Game, content: Content, dice: Dice) {
   for (const enemy of game.enemies.filter((e) => e.hp > 0)) {
-    const target = game.players
-      .filter((p) => p.hp > 0)
-      .sort(
-        (a, b) => distance(enemy, a) - distance(enemy, b) || a.slot - b.slot,
-      )[0];
-    if (!target) break;
-    for (
-      let step = 0;
-      step < enemy.movement && distance(enemy, target) > enemy.range;
-      step++
-    ) {
-      const options = [
-        { x: enemy.x + 1, y: enemy.y },
-        { x: enemy.x - 1, y: enemy.y },
-        { x: enemy.x, y: enemy.y + 1 },
-        { x: enemy.x, y: enemy.y - 1 },
-      ]
-        .filter((p) => passable(game, content, p, enemy.id))
-        .sort((a, b) => distance(a, target) - distance(b, target));
-      if (
-        options[0] &&
-        distance(options[0], target) < distance(enemy, target)
-      ) {
-        enemy.x = options[0].x;
-        enemy.y = options[0].y;
-      }
+    const route = enemyRoute(game, content, enemy);
+    if (!route) continue;
+    const { target, path } = route;
+    const destination = path[Math.min(enemy.movement, path.length) - 1];
+    if (destination) {
+      enemy.x = destination.x;
+      enemy.y = destination.y;
     }
     if (
       distance(enemy, target) <= enemy.range &&
@@ -612,6 +788,7 @@ function endTurn(game: Game, content: Content, dice: Dice) {
   game.movementRoll = null;
   game.movementLeft = 0;
   game.actionUsed = false;
+  updateEncounter(game, true);
   addEvent(game, "TURN", `Es el turno de ${next.name}.`);
 }
 export function resolve(
@@ -637,6 +814,7 @@ export function resolve(
     game.status = "ACTIVE";
     game.round = 1;
     game.activePlayerId = game.players[0].id;
+    updateEncounter(game, true);
     addEvent(
       game,
       "START",
@@ -665,7 +843,9 @@ export function resolve(
   switch (action.type) {
     case "ROLL_MOVEMENT":
       requireRule(
-        game.phase === "MOVEMENT" && game.movementRoll === null,
+        game.phase === "MOVEMENT" &&
+          game.movementRoll === null &&
+          game.movementMode !== "EXPLORATION",
         "ALREADY_ROLLED",
         "El movimiento ya se resolvió.",
       );
@@ -698,6 +878,11 @@ export function resolve(
       player.x = next.x;
       player.y = next.y;
       game.movementLeft--;
+      game.movementSpent =
+        (game.movementSpent ??
+          (game.movementRoll === null
+            ? 0
+            : movementTotal(game.movementRoll) - game.movementLeft - 1)) + 1;
       break;
     }
     case "FINISH_MOVEMENT":
@@ -940,12 +1125,16 @@ export function resolve(
         "Acercate a la zona para interactuar.",
       );
       if (chest) {
+        if (!chest.opened) {
+          openChest(game, player, chest, content, dice);
+          break;
+        }
         requireRule(
           chest.opened &&
             chest.lootId &&
             game.items[chest.lootId]?.ownerId === "",
           "CHEST_LOCKED",
-          "Los cofres entregan botín al derrotar a todos los enemigos.",
+          "El cofre ya está resuelto y no tiene botín pendiente.",
         );
         const item = game.items[chest.lootId];
         requireItemClass(content, item.definitionId, player.classId);
@@ -1003,6 +1192,7 @@ export function resolve(
       endTurn(game, content, dice);
       break;
   }
+  if (game.status === "ACTIVE") updateEncounter(game);
   game.revision++;
   assertInventory(game, content);
   return game;

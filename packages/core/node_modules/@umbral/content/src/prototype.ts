@@ -93,6 +93,12 @@ export const prototype = {
   enemies: enemyPlacements.map(({ archetypeId, x, y, id }) =>
     spawnEnemy(archetypeId, x, y, id),
   ),
+  // Fixture provisional; la serpiente usa un marcador hasta recibir arte propio.
+  chestSnake: {
+    archetypeId: "snake",
+    ...enemyRecipes.snake,
+    hp: enemyRecipes.snake.maxHp,
+  },
   chests: courtyardChests.map((chest) => ({ ...chest, opened: false })),
   interactables: courtyardInteractables.map((object) => ({
     ...object,
@@ -132,7 +138,7 @@ export const prototype = {
     minimumDamage: 0,
     interactConsumesAction: true,
     equipConsumesAction: true,
-    chestLootAfterClearOnly: true,
+    chestLootAfterClearOnly: false,
   } as const,
 };
 
