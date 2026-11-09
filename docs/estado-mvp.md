@@ -23,7 +23,7 @@ Los logs del servidor aún registran `turn_timer_storage_error` intermitente al 
 | Inicio y lobby  | Crear, unirse, recuperar, configuración local, cuatro clases seleccionables y hasta cuatro viajeros. Cada clase se reserva al elegirla y solo puede ocuparla un jugador. |
 | Mesa y celular  | Tablero Phaser compartido; ficha React móvil sin tablero, flechas/dados condicionados al turno, salud y ataques.                                                         |
 | Inventario      | Cuatro espacios de bolsa, cuatro casillas de pociones en fila y casco, pechera, arma/escudo y botas exclusivos de cada clase. Reparto y posesión validados por el servidor.                       |
-| Encuentro       | Mundo explorable de 58 × 70 casillas con cámara, muros y troncos trazados, 30 enemigos de prueba y 11 cofres de collisionV2, fuente y salida de demo.                    |
+| Encuentro       | Mundo explorable de 58 × 70 casillas con cámara, muros y troncos trazados, 41 enemigos de prueba y 11 cofres del mapa actual, fuente y salida de demo.                    |
 | Servidor y base | Colyseus/HTTP autoritativo, PostgreSQL real, migraciones, recibos e IDs persistentes.                                                                                    |
 | Recuperación    | Recarga, reconexión con token durable, código privado de campaña y código de reemplazo de control.                                                                       |
 | Docker          | PostgreSQL 18, backend Node 24 y web Nginx construidos y levantados; base y backend saludables.                                                                          |

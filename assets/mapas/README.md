@@ -20,7 +20,7 @@ La imagen muestra una vista general de un escenario de ruinas con vegetación, c
 
 ## Integración
 
-La demo usa la imagen como fondo con propiedades lógicas independientes y marcadores superpuestos. [collision.json](collision.json) es la fuente editable de muros, troncos y siluetas de los siete árboles grandes visibles. [collisionV2.json](collisionV2.json) es la fuente de prueba vigente desde el 20/10/2026: incluye 30 enemigos, 11 cofres, ocho plantas y cuatro apariciones. Conserva 1197 bloqueos y seis copas; la silueta noroeste sigue vacía y tres árboles no tienen tronco marcado. Los arbustos, rocas y objetos menores siguen fuera del trazado. [collision-pre-v2.json](collision-pre-v2.json) conserva el mapa anterior a esta incorporación; el archivo V2 original no se modifica.
+La demo usa la imagen como fondo con propiedades lógicas independientes y marcadores superpuestos. [collision.json](collision.json) es la fuente editable de muros, troncos y siluetas de los siete árboles grandes visibles. [mapa_con_arqueros.json](mapa_con_arqueros.json) es la fuente vigente: incluye 41 enemigos, entre ellos 11 arqueros, 11 cofres, ocho plantas y cuatro apariciones. [collisionV2.json](collisionV2.json) conserva la versión de prueba anterior, incorporada el 20/10/2026. Conserva 1197 bloqueos y seis copas; la silueta noroeste sigue vacía y tres árboles no tienen tronco marcado. Los arbustos, rocas y objetos menores siguen fuera del trazado. [collision-pre-v2.json](collision-pre-v2.json) conserva el mapa anterior a esta incorporación; el archivo V2 original no se modifica.
 
 ## Integración de demo — 16/10/2026
 
