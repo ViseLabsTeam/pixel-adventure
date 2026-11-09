@@ -93,9 +93,12 @@ export function Controller({
   const enemyIdsInRange = enemiesInRange.map((enemy) => enemy.id);
   useEffect(() => {
     if (!game || !actor || attackInFlight || game.pendingAttack) return;
-    const next = enemyIdsInRange.includes(target)
-      ? target
-      : (enemyIdsInRange[0] ?? "");
+    const next =
+      actor.classId === "paladin" && selectedAbility !== "basic"
+        ? ""
+        : enemyIdsInRange.includes(target)
+          ? target
+          : (enemyIdsInRange[0] ?? "");
     if (next !== target) setTarget(next);
     if (
       game.activePlayerId === actor.id &&
@@ -109,6 +112,7 @@ export function Controller({
     actor?.x,
     actor?.y,
     enemyIdsInRange.join("|"),
+    selectedAbility,
     attackInFlight,
     game?.pendingAttack?.targetId,
   ]);
@@ -144,6 +148,7 @@ export function Controller({
   const canRollAttack =
     canAct &&
     !game.pendingAttack &&
+    !(player.classId === "paladin" && selectedAbility !== "basic") &&
     enemyIdsInRange.includes(target) &&
     !!game.targets[target]?.valid &&
     player.resource >=
@@ -152,6 +157,20 @@ export function Controller({
         : selectedAbility === "ultimate"
           ? 300
           : 0);
+  const paladinAbility =
+    player.classId === "paladin" && selectedAbility !== "basic";
+  const nearbyEnemies = game.enemies.filter(
+    (enemy) =>
+      enemy.hp > 0 &&
+      Math.max(Math.abs(enemy.x - player.x), Math.abs(enemy.y - player.y)) ===
+        1,
+  );
+  const canCastPaladin =
+    paladinAbility &&
+    canAct &&
+    !game.pendingAttack &&
+    player.resource >= (selectedAbility === "special" ? 100 : 300) &&
+    (selectedAbility === "special" || nearbyEnemies.length > 0);
   const canRollDamage =
     enabled && !!game.pendingAttack && game.pendingAttack.actorId === player.id;
   const selectedItem = inventorySelection
@@ -322,12 +341,19 @@ export function Controller({
             <h1>{player.name}</h1>
             <p>{classes[player.classId].title}</p>
             <Health hp={shownHp} max={player.stats.maxHp} label />
+            {player.consecratedBuff && (
+              <p className="muted" role="status">
+                Impacto consagrado: defensa y resistencia +
+                {player.consecratedBuff.percent}% hasta el próximo turno del
+                paladín.
+              </p>
+            )}
             <div className="stat-grid" aria-label="Estadísticas del personaje">
               {stats.map(({ label, value, Icon }) => (
                 <div
                   className="stat-entry"
                   key={label}
-                  title={`${label}: ${value} de 10`}
+                  title={`${label}: ${value}`}
                 >
                   <Icon size={13} aria-hidden="true" />
                   <span>{label}</span>
@@ -436,41 +462,52 @@ export function Controller({
                 </small>
               </div>
             </div>
-            <label className="field-label">Elegí un objetivo</label>
-            <div className="target-list">
-              {shownEnemies.map((enemy) => (
-                <button
-                  key={enemy.id}
-                  disabled={!!game.pendingAttack}
-                  aria-pressed={target === enemy.id}
-                  className={target === enemy.id ? "selected" : ""}
-                  onClick={() => {
-                    if (game.pendingAttack) return;
-                    setTarget(enemy.id);
-                    select(enemy.id);
-                  }}
-                >
-                  <span>
-                    {enemy.name}
-                    <small>
-                      {enemy.hp}/{enemy.maxHp} vida
-                    </small>
-                  </span>
-                  <b>
-                    {game.targets[enemy.id]?.valid
-                      ? `${game.targets[enemy.id].chance}%`
-                      : "Lejos"}
-                  </b>
-                </button>
-              ))}
-              {shownEnemies.length === 0 && (
-                <p className="muted">
-                  {game.enemies.some((enemy) => enemy.hp > 0)
-                    ? `No percibís enemigos a ${perceptionRange} casillas.`
-                    : "El patio está despejado."}
-                </p>
-              )}
-            </div>
+            <label className="field-label">
+              {paladinAbility ? "Efecto de la habilidad" : "Elegí un objetivo"}
+            </label>
+            {paladinAbility && (
+              <p className="muted">
+                {selectedAbility === "special"
+                  ? "Aumenta defensa y resistencia: 45% para vos y 15% para tus compañeros. No causa daño."
+                  : "Daña a los enemigos en las ocho casillas alrededor de tu personaje."}
+              </p>
+            )}
+            {!paladinAbility && (
+              <div className="target-list">
+                {shownEnemies.map((enemy) => (
+                  <button
+                    key={enemy.id}
+                    disabled={!!game.pendingAttack}
+                    aria-pressed={target === enemy.id}
+                    className={target === enemy.id ? "selected" : ""}
+                    onClick={() => {
+                      if (game.pendingAttack) return;
+                      setTarget(enemy.id);
+                      select(enemy.id);
+                    }}
+                  >
+                    <span>
+                      {enemy.name}
+                      <small>
+                        {enemy.hp}/{enemy.maxHp} vida
+                      </small>
+                    </span>
+                    <b>
+                      {game.targets[enemy.id]?.valid
+                        ? `${game.targets[enemy.id].chance}%`
+                        : "Lejos"}
+                    </b>
+                  </button>
+                ))}
+                {shownEnemies.length === 0 && (
+                  <p className="muted">
+                    {game.enemies.some((enemy) => enemy.hp > 0)
+                      ? `No percibís enemigos a ${perceptionRange} casillas.`
+                      : "El patio está despejado."}
+                  </p>
+                )}
+              </div>
+            )}
             <div className="special-actions">
               {(["special", "ultimate"] as const).map((ability) => (
                 <button
@@ -480,8 +517,12 @@ export function Controller({
                   disabled={
                     !canAct ||
                     !!game.pendingAttack ||
-                    !enemyIdsInRange.includes(target) ||
-                    !game.targets[target]?.valid ||
+                    (player.classId !== "paladin" &&
+                      (!enemyIdsInRange.includes(target) ||
+                        !game.targets[target]?.valid)) ||
+                    (player.classId === "paladin" &&
+                      ability === "ultimate" &&
+                      nearbyEnemies.length === 0) ||
                     player.resource < (ability === "special" ? 100 : 300)
                   }
                   onClick={() =>
@@ -502,40 +543,59 @@ export function Controller({
                 </button>
               ))}
             </div>
-            <div className="attack-dice-pair" aria-label="Dados de ataque">
+            {paladinAbility && (
               <button
-                className="die-button attack-die"
-                aria-label={`Tirar D20 para ${selectedAbility === "basic" ? "ataque básico" : selectedAbility === "special" ? "especial" : "ulti"}`}
-                disabled={!canRollAttack}
+                className="button primary"
+                disabled={!canCastPaladin}
                 onClick={() =>
                   command({
-                    type: "ATTACK",
-                    targetId: target,
-                    ability: selectedAbility,
+                    type: "CAST_PALADIN",
+                    ability:
+                      selectedAbility === "ultimate" ? "ultimate" : "special",
                   })
                 }
               >
-                <DieButtonArt
-                  sides={20}
-                  enabled={canRollAttack}
-                  reducedMotion={preferences.reducedMotion}
-                />
-                <span>D20 · ataque</span>
+                Activar {abilities.paladin[selectedAbility]}
               </button>
-              <button
-                className="die-button attack-die"
-                aria-label="Tirar D6 para calcular el daño"
-                disabled={!canRollDamage}
-                onClick={() => command({ type: "ROLL_ATTACK_D6" })}
-              >
-                <DieButtonArt
-                  sides={6}
-                  enabled={canRollDamage}
-                  reducedMotion={preferences.reducedMotion}
-                />
-                <span>D6 · daño</span>
-              </button>
-            </div>
+            )}
+            {(!paladinAbility || canRollDamage) && (
+              <div className="attack-dice-pair" aria-label="Dados de ataque">
+                {!paladinAbility && (
+                  <button
+                    className="die-button attack-die"
+                    aria-label={`Tirar D20 para ${selectedAbility === "basic" ? "ataque básico" : selectedAbility === "special" ? "especial" : "ulti"}`}
+                    disabled={!canRollAttack}
+                    onClick={() =>
+                      command({
+                        type: "ATTACK",
+                        targetId: target,
+                        ability: selectedAbility,
+                      })
+                    }
+                  >
+                    <DieButtonArt
+                      sides={20}
+                      enabled={canRollAttack}
+                      reducedMotion={preferences.reducedMotion}
+                    />
+                    <span>D20 · ataque</span>
+                  </button>
+                )}
+                <button
+                  className="die-button attack-die"
+                  aria-label="Tirar D6 para calcular el daño"
+                  disabled={!canRollDamage}
+                  onClick={() => command({ type: "ROLL_ATTACK_D6" })}
+                >
+                  <DieButtonArt
+                    sides={6}
+                    enabled={canRollDamage}
+                    reducedMotion={preferences.reducedMotion}
+                  />
+                  <span>D6 · daño</span>
+                </button>
+              </div>
+            )}
             {nearby.length > 0 && active && !game.actionUsed && (
               <div
                 className="nearby-actions"

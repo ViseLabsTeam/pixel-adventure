@@ -27,6 +27,7 @@ describe("recetas de actores", () => {
   });
   it("crea al goblin arquero con alcance y caminatas propios", () => {
     const enemy = spawnEnemy("goblin-archer", 3, 4, "archer-a");
+    const goblin = spawnEnemy("goblin", 1, 2, "goblin-a");
     expect(enemy).toMatchObject({
       id: "archer-a",
       archetypeId: "goblin-archer",
@@ -34,6 +35,8 @@ describe("recetas de actores", () => {
       x: 3,
       y: 4,
     });
+    expect(enemy.hp).toBe(enemy.maxHp);
+    expect(enemy.maxHp).toBeLessThan(goblin.maxHp);
     expect(actorRecipes.enemies["goblin-archer"].clips.walkUp).toContain(
       "north",
     );

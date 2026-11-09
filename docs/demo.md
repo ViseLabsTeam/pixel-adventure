@@ -4,6 +4,13 @@ Revisión: 22 de octubre de 2026. Versión de aplicación 0.1.0, reglas de demo 
 
 ## Flujo disponible
 
+### Habilidades del paladín
+
+Impacto consagrado consume 100 de Fe y la acción, sin daño ni tiradas: aumenta defensa física y resistencia mágica de los compañeros vivos un 15% y las del paladín un 45%. El porcentaje se aplica a base más equipo, redondeando el incremento hacia arriba. No se acumula. La duración provisional es hasta el inicio del próximo turno del paladín; si cae, vence al comenzar la siguiente ronda. El efecto se conserva al guardar.
+
+Juicio del guardián consume 300 de Fe y la acción. Afecta a los enemigos de las ocho casillas vecinas, incluidas diagonales, sin dañar aliados ni elegir objetivo. Comparte un D20 y un D6 de daño entre los objetivos fijados al lanzar; cada enemigo aplica su defensa. Este ataque de área no realiza comprobación de impacto. El multiplicador de ulti sigue siendo 2,5. Ambas habilidades sustituyen para el paladín el comportamiento genérico de daño aumentado descrito más abajo.
+
+
 Inicio → crear mesa o unirse → lobby → encuentro → resultado. De dos a cuatro jugadores, con paladín, guerrero, mago o arquera; cada clase se elige una sola vez. Al seleccionarla, el servidor la reserva durante 30 segundos y el formulario renueva la reserva cada 10 segundos. El resto la ve bloqueada al actualizar disponibilidad; las solicitudes simultáneas se serializan y el servidor rechaza la clase ya reservada u ocupada. La reserva se consume al unirse, se libera al volver o cambiar el código y vence si se abandona la página. Las partidas anteriores con clases repetidas siguen pudiendo recuperarse. La pantalla compartida tiene rol de coordinador y no ocupa slot; cada teléfono recibe su propio personaje.
 
 Al crear una mesa se elige `LOCAL` u `ONLINE`. `LOCAL` es el valor predeterminado y los guardados anteriores sin el campo `mode` se leen como locales. En online, el anfitrión comparte la mesa por videollamada y envía un enlace HTTPS para los controles remotos. El modo queda en el snapshot y se conserva al recuperar; no cambia las reglas, las identidades, los permisos ni el flujo de comandos. El enlace de invitación contiene solo el código público; los tokens y el código privado de recuperación no se incluyen.
@@ -49,6 +56,8 @@ El editor registra también cuatro apariciones, cofres con objeto de botín e in
 
 - Centinela: 24 de vida, alcance 1, movimiento 1. Eco: 18 de vida, alcance 2, movimiento 1. Ataques enemigos físicos; buscan por anchura una casilla alcanzable desde la que puedan atacar a un jugador vivo, respetando alcance, línea de visión, obstáculos y ocupación; pueden alejarse temporalmente del objetivo para rodear un bloqueo.
 - Cada personaje empieza con poción (+12 vida y +1/3 recurso), botas de su clase (+1 defensa), equipo de su ranura `weapon` (+2 al atributo de daño físico o mágico) y pechera de su clase (+2 defensa, +1 resistencia). Paladín recibe escudo, guerrero espada, mago bastón y arquera arco. Son valores provisionales de prueba.
+- El mapa actual incorpora un revividor de prueba en `(10,-14)`. Un personaje vivo adyacente puede activarlo una sola vez, consumiendo su acción, para devolver a los caídos con 1 punto de vida. El primer compañero reaparece dos casillas al sur `(10,-12)`; los demás se ubican en casillas libres cercanas sin superponerse. Sin caídos o sin espacio legal se rechaza sin consumir la acción. El uso y las nuevas posiciones se guardan junto con el comando; las campañas existentes conservan sus interactuables. Si cae todo el grupo, la partida pasa a derrota y se muestra Game Over: ya no puede activarse el revividor. Esta es una política temporal de la demo.
+
 - Los 11 cofres del mapa actual tienen una poción configurada para su apertura automática al limpiar. La apertura manual usa el sorteo por tercios descrito abajo. El catálogo mantiene casco y variantes de clase del equipo anterior para campañas guardadas. Tras limpiar, el botín bueno se asigna por orden al primer vivo compatible con espacio; si no hay espacio o destinatario compatible queda asociado al cofre y puede recogerse cerca por la clase correspondiente.
 - La fuente cura 8 una vez por personaje en este encuentro.
 
@@ -125,7 +134,7 @@ La fase de proximidad se recalcula al resolver cada comando: **Exploración** cu
 
 La apertura manual de cofres consume la acción y sortea una sola vez tres resultados equiprobables: arma compatible con la clase de quien abre, poción de vida/recurso o serpiente. Si no hay espacio, el objeto queda junto al cofre conservando su ID; no se vuelve a sortear al recogerlo. La serpiente usa un marcador provisional y nace en la casilla legal libre más cercana al cofre. Si no existe ninguna casilla legal, se rechaza la apertura antes de gastar acción o azar. Los cofres sin resolver conservan el botín bueno configurado para su apertura automática al limpiar.
 
-El catálogo y el editor incluyen `goblin-archer`, con alcance de prueba de tres casillas, reposo, caminata y ataque derivados de sus GIF. El mapa actual coloca 11 arqueros en partidas nuevas; las campañas guardadas conservan sus enemigos y ubicaciones. Los dados habilitados reproducen su GIF y un halo; con Reducir movimiento se conserva la imagen estática y el halo.
+El catálogo y el editor incluyen `goblin-archer`, con 14 puntos de vida de prueba frente a 20 del goblin normal, alcance de prueba de tres casillas, reposo, caminata y ataque derivados de sus GIF. El mapa actual coloca 11 arqueros en partidas nuevas; las campañas guardadas conservan sus enemigos y ubicaciones. Los dados habilitados reproducen su GIF y un halo; con Reducir movimiento se conserva la imagen estática y el halo.
 
 La ventana compartida sigue el centro del grupo cercano al personaje activo; los pasos siguen siendo de una casilla y el servidor valida límites, silueta transitable, muros y ocupantes. El origen (0,0) corresponde al píxel (494,366) del PNG. La máscara de 58 × 70 es provisional: separa las ruinas del vacío exterior, pero árboles, escaleras y objetos pintados necesitan colisiones diseñadas a mano antes de una aventura definitiva. El goblin aparece inicialmente fuera de la vista, en (12,6), con reposo y ataque derivados de sus GIFs. Los otros enemigos conservan marcadores provisionales.
 

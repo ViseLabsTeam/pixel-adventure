@@ -83,6 +83,14 @@ export const courtyardInteractables = [
     y: 9,
     itemDefinition: "potion",
   },
+  {
+    id: "reviver-1",
+    kind: "reviver",
+    name: "Altar de regreso",
+    x: 10,
+    y: -14,
+    itemDefinition: "",
+  },
 ] as const;
 export const courtyardEnemies = [
   { id: "sentinel", archetypeId: "sentinel", x: 3, y: 5 },

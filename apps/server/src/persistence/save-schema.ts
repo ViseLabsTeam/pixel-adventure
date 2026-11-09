@@ -32,6 +32,7 @@ export const saveSchema = z.object({
     .object({
       actorId: z.string(),
       targetId: z.string(),
+      targetIds: z.array(z.string()).min(1).optional(),
       ability: z.enum(["basic", "special", "ultimate"]),
       d20: z.number().int().min(1).max(20),
     })
@@ -60,6 +61,13 @@ export const saveSchema = z.object({
         hp: integer,
         resource: integer.max(300),
         stats,
+        consecratedBuff: z
+          .object({
+            percent: z.union([z.literal(15), z.literal(45)]),
+            sourcePlayerId: z.string(),
+            appliedRound: integer,
+          })
+          .optional(),
         ...point,
         inventory: z.array(z.string().nullable()).length(4),
         potions: z.array(z.string().nullable()).length(4).optional(),

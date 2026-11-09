@@ -88,7 +88,9 @@ for (const object of source.interactables)
     !/^[a-z0-9-]+$/.test(object.kind) ||
     typeof object.name !== "string" ||
     !object.name.trim() ||
-    !/^[a-z0-9-]+$/.test(object.itemDefinition)
+    (object.kind === "reviver"
+      ? object.itemDefinition !== ""
+      : !/^[a-z0-9-]+$/.test(object.itemDefinition))
   )
     throw new Error("Interactuable inválido");
 const { x: originX, y: originY } = source.origin;

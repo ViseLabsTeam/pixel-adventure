@@ -96,7 +96,10 @@ function showSelection() {
       !entry ||
       selected.type === "spawn" ||
       (selected.type === "chests" &&
-        (id === "entity-kind" || id === "entity-name"));
+        (id === "entity-kind" || id === "entity-name")) ||
+      (selected.type === "interactables" &&
+        entry.kind === "reviver" &&
+        id === "entity-item");
   $("delete-placement").disabled = !entry;
   for (const axis of ["x", "y"]) {
     $("entity-" + axis).value = entry?.[axis] ?? "";
@@ -227,8 +230,8 @@ function render() {
     marker(
       object.x,
       object.y,
-      object.kind === "plant" ? "P" : "I",
-      "#9ee081",
+      object.kind === "plant" ? "P" : object.kind === "reviver" ? "R" : "I",
+      object.kind === "reviver" ? "#a9d8ff" : "#9ee081",
       selected?.type === "interactables" && selected.id === object.id,
       true,
     );
@@ -352,7 +355,11 @@ function edit(event) {
     const index = Number($("spawn-slot").value);
     data.spawns[index] = { x, y };
     select("spawn", data.spawns[index], index);
-  } else if (tool === "chest" || tool === "interactable") {
+  } else if (
+    tool === "chest" ||
+    tool === "interactable" ||
+    tool === "reviver"
+  ) {
     const type = tool === "chest" ? "chests" : "interactables";
     const existing = data[type].find((entry) => entry.x === x && entry.y === y);
     if (existing) select(type, existing);
@@ -366,12 +373,19 @@ function edit(event) {
               itemDefinition: $("entity-item").value || "potion",
             }
           : {
-              id: nextId("object"),
-              kind: $("entity-kind").value || "plant",
-              name: $("entity-name").value || "Planta",
+              id: nextId(tool === "reviver" ? "reviver" : "object"),
+              kind:
+                tool === "reviver"
+                  ? "reviver"
+                  : $("entity-kind").value || "plant",
+              name:
+                tool === "reviver"
+                  ? "Altar de regreso"
+                  : $("entity-name").value || "Planta",
               x,
               y,
-              itemDefinition: $("entity-item").value || "potion",
+              itemDefinition:
+                tool === "reviver" ? "" : $("entity-item").value || "potion",
             };
       data[type].push(entry);
       select(type, entry);
@@ -490,6 +504,11 @@ for (const [field, property] of [
     }
     entry[property] = value;
     if (property === "id") selected.id = value;
+    if (property === "kind") {
+      entry.itemDefinition =
+        value === "reviver" ? "" : entry.itemDefinition || "potion";
+      showSelection();
+    }
     render();
   });
 $("delete-placement").onclick = () => {

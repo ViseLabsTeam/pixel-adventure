@@ -95,6 +95,51 @@ h2 {
 h3 {
   font-weight: 500;
 }
+.game-over {
+  min-height: calc(100dvh - 80px);
+  display: grid;
+  place-items: center;
+  padding: 32px 18px;
+  background: radial-gradient(circle at 50% 35%, #303128 0, #101813 65%);
+}
+.game-over-card {
+  width: min(100%, 560px);
+  padding: clamp(28px, 7vw, 64px);
+  text-align: center;
+  border: 1px solid #6f5c48;
+  background: #19201b;
+  box-shadow: 0 20px 70px #0008;
+}
+.game-over-mark {
+  display: block;
+  margin-bottom: 20px;
+  color: #ca9476;
+  font-size: 42px;
+}
+.game-over-eyebrow {
+  color: #ca9476;
+  letter-spacing: 0.18em;
+}
+.game-over h1 {
+  margin: 12px 0;
+  color: #f1e0c0;
+  font-size: clamp(36px, 8vw, 64px);
+  line-height: 1.05;
+}
+.game-over-message {
+  color: #c7cabe;
+}
+.game-over-round {
+  margin: 20px 0 30px;
+  color: var(--muted);
+}
+.game-over-action {
+  min-height: 48px;
+  padding: 10px 24px;
+  border: 1px solid var(--gold);
+  background: #433b2b;
+  color: #fff2d3;
+}
 p {
   line-height: 1.65;
 }

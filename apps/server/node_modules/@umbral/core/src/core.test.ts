@@ -14,9 +14,9 @@ import {
 } from "./index";
 import { prototype } from "@umbral/content/prototype";
 import { commandSchema, classSchema } from "@umbral/protocol";
-function setup() {
+function setup(firstClass: "paladin" | "warrior" = "paladin") {
   let game = createGame("campaign", "ABC234", prototype);
-  game = addPlayer(game, "one", "Ada", "paladin", prototype);
+  game = addPlayer(game, "one", "Ada", firstClass, prototype);
   game = addPlayer(game, "two", "Bea", "mage", prototype);
   // These tests exercise combat dice independently of the map's starting distance.
   game.enemies.push({
@@ -484,7 +484,7 @@ describe("recursos de clase de demo", () => {
     ability: "basic" | "special" | "ultimate",
     miss = false,
   ) => {
-    const g = setup();
+    const g = setup("warrior");
     g.players[0].x = 3;
     g.players[0].y = 6;
     g.players[0].resource = amount;
@@ -506,7 +506,7 @@ describe("recursos de clase de demo", () => {
     expect(attack(300, "basic").players[0].resource).toBe(300);
   });
   it("rechaza recursos insuficientes antes de tirar dados o consumir acción", () => {
-    const g = setup();
+    const g = setup("warrior");
     g.players[0].x = 3;
     g.players[0].y = 6;
     let rolls = 0;

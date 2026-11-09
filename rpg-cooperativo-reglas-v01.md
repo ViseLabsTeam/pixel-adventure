@@ -376,6 +376,8 @@ Paladín tanque: mayor vida y armadura, menor daño; Fe dorada. Guerrero: equili
 
 Barra dividida en tercios: especial consume uno, ulti los tres. Básicos e ítems recuperan recurso. Para la demo se aceptaron inicio en 1/3, recarga de 1/3 por básico o poción y habilidades de daño aumentado. Valores, nombres y multiplicadores numéricos temporales en [contrato de demo](docs/demo.md); no fijan balance definitivo.
 
+Decisión del responsable: Impacto consagrado del paladín no causa daño; aumenta defensa y resistencia de sus compañeros un 15% y las propias un 45%. Juicio del guardián causa daño alrededor del paladín. La demo interpreta el área como las ocho casillas vecinas y conserva como políticas temporales la duración, el redondeo y la resolución de dados descritos en su contrato.
+
 ## Ritmo visual confirmado
 
 Respetar la duración de las animaciones originales y no habilitar la siguiente fase hasta que termine la reproducción. La figura del personaje ocupa aproximadamente una casilla y media; el paladín es algo más alto. Esto no amplía su casilla lógica ni hitbox.

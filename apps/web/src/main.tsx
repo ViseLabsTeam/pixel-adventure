@@ -13,6 +13,7 @@ import { Home } from "./features/home";
 import { Lobby } from "./features/lobby";
 import { Controller } from "./features/controller";
 import { Table } from "./features/table";
+import { GameOver } from "./features/game-over";
 import {
   loadSession,
   saveSession,
@@ -62,7 +63,8 @@ function App() {
     !!session &&
     session.role !== "PLAYER" &&
     !!connection.game &&
-    connection.game.status !== "LOBBY";
+    connection.game.status !== "LOBBY" &&
+    connection.game.status !== "LOST";
   return (
     <div
       className={`app ${tableMode ? "table-mode" : ""} ${preferences.reducedMotion ? "reduced-motion" : ""}`}
@@ -95,6 +97,8 @@ function App() {
           session={session}
           recoveryCode={recoveryCode}
         />
+      ) : connection.game.status === "LOST" ? (
+        <GameOver game={connection.game} onHome={home} />
       ) : session.role === "PLAYER" ? (
         <Controller
           connection={activeConnection}

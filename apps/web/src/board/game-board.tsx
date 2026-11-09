@@ -695,14 +695,20 @@ class Courtyard extends Phaser.Scene {
         const x = OFFSET + object.x * TILE + 35;
         const y = OFFSET + object.y * TILE + 35;
         const g = this.add.graphics();
-        g.fillStyle(object.kind === "plant" ? 0x7dbb68 : 0x9ab7b0).fillCircle(
-          x,
-          y,
-          13,
-        );
+        g.fillStyle(
+          object.kind === "plant"
+            ? 0x7dbb68
+            : object.kind === "reviver"
+              ? 0x82bce5
+              : 0x9ab7b0,
+        ).fillCircle(x, y, 13);
         g.lineStyle(2, 0xf3eab8).strokeCircle(x, y, 13);
         this.decor!.add(g);
-        label(object.x, object.y, object.kind === "plant" ? "✿" : "✦");
+        label(
+          object.x,
+          object.y,
+          object.kind === "plant" ? "✿" : object.kind === "reviver" ? "✚" : "✦",
+        );
       }
       for (const zone of state.zones) {
         const x = OFFSET + zone.x * TILE + 35,

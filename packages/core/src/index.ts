@@ -32,6 +32,11 @@ export interface Player extends Point {
   slot: number;
   hp: number;
   stats: Stats;
+  consecratedBuff?: {
+    percent: 15 | 45;
+    sourcePlayerId: string;
+    appliedRound: number;
+  };
   inventory: (string | null)[];
   potions: (string | null)[];
   equipment: Record<EquipmentSlot, string | null>;
@@ -155,6 +160,7 @@ export interface Game {
   pendingAttack?: {
     actorId: string;
     targetId: string;
+    targetIds?: string[];
     ability: Ability;
     d20: number;
   } | null;
@@ -194,6 +200,7 @@ export type Action =
   | { type: "START" | "ROLL_MOVEMENT" | "FINISH_MOVEMENT" | "END_TURN" }
   | { type: "MOVE_STEP"; direction: "UP" | "DOWN" | "LEFT" | "RIGHT" }
   | { type: "ATTACK"; targetId: string; ability?: Ability }
+  | { type: "CAST_PALADIN"; ability: "special" | "ultimate" }
   | { type: "ROLL_ATTACK_D6" }
   | { type: "INTERACT"; targetId: string }
   | { type: "EQUIP" | "USE_ITEM" | "DISCARD_ITEM"; itemId: string }
@@ -258,6 +265,11 @@ export function effectiveStats(game: Game, player: Player): Stats {
       stats.magicDamage =
         (stats.magicDamage ?? 0) + (game.items[id].magicDamage ?? 0);
     }
+  }
+  if (player.consecratedBuff) {
+    const percent = player.consecratedBuff.percent;
+    stats.defense += Math.ceil((stats.defense * percent) / 100);
+    stats.resistance += Math.ceil((stats.resistance * percent) / 100);
   }
   return stats;
 }
@@ -784,6 +796,19 @@ function endTurn(game: Game, content: Content, dice: Dice) {
     return;
   }
   game.activePlayerId = next.id;
+  for (const member of game.players) {
+    if (
+      member.consecratedBuff &&
+      member.consecratedBuff.appliedRound < game.round &&
+      (member.consecratedBuff.sourcePlayerId === next.id ||
+        !game.players.some(
+          (candidate) =>
+            candidate.id === member.consecratedBuff?.sourcePlayerId &&
+            candidate.hp > 0,
+        ))
+    )
+      delete member.consecratedBuff;
+  }
   game.phase = "MOVEMENT";
   game.movementRoll = null;
   game.movementLeft = 0;
@@ -894,10 +919,87 @@ export function resolve(
       game.phase = "ACTION";
       game.movementLeft = 0;
       break;
+    case "CAST_PALADIN": {
+      requireRule(
+        player.classId === "paladin",
+        "FORBIDDEN_ABILITY",
+        "Solo el paladín puede usar esta habilidad.",
+      );
+      const cost =
+        action.ability === "special"
+          ? content.resource.specialCost
+          : content.resource.ultimateCost;
+      requireRule(
+        player.resource >= cost,
+        "NOT_ENOUGH_RESOURCE",
+        "No tenés suficiente recurso para esa habilidad.",
+      );
+      if (action.ability === "special") {
+        consumeAction(game);
+        player.resource -= cost;
+        for (const member of game.players.filter(
+          (candidate) => candidate.hp > 0,
+        )) {
+          member.consecratedBuff = {
+            percent: member.id === player.id ? 45 : 15,
+            sourcePlayerId: player.id,
+            appliedRound: game.round,
+          };
+        }
+        addEvent(
+          game,
+          "CONSECRATED_IMPACT",
+          `${player.name} fortalece la defensa y resistencia del grupo.`,
+          undefined,
+          { actorId: player.id, ability: "special" },
+        );
+        break;
+      }
+      const targets = game.enemies.filter(
+        (enemy) =>
+          enemy.hp > 0 &&
+          Math.max(
+            Math.abs(enemy.x - player.x),
+            Math.abs(enemy.y - player.y),
+          ) === 1,
+      );
+      requireRule(
+        targets.length > 0,
+        "NO_ADJACENT_ENEMIES",
+        "No hay enemigos alrededor del paladín.",
+      );
+      consumeAction(game);
+      player.resource -= cost;
+      const d20 = dice(20);
+      game.pendingAttack = {
+        actorId: player.id,
+        targetId: targets[0].id,
+        targetIds: targets.map((target) => target.id),
+        ability: "ultimate",
+        d20,
+      };
+      addEvent(
+        game,
+        "ATTACK_D20",
+        `${player.name} tira D20 para Juicio del guardián: ${d20}. Ahora debe tirar D6.`,
+        [d20],
+        {
+          actorId: player.id,
+          targetId: targets[0].id,
+          ability: "ultimate",
+        },
+      );
+      break;
+    }
     case "ATTACK": {
       requireRule(!game.actionUsed, "ACTION_USED", "Ya usaste tu acción.");
       const enemy = game.enemies.find((e) => e.id === action.targetId),
         ability = action.ability ?? "basic";
+      requireRule(
+        player.classId !== "paladin" || ability === "basic",
+        "USE_PALADIN_CAST",
+        "Usá la habilidad del paladín sin elegir un objetivo.",
+      );
       requireRule(
         ["basic", "special", "ultimate"].includes(ability),
         "INVALID_ABILITY",
@@ -974,6 +1076,56 @@ export function resolve(
         "NO_ATTACK_PENDING",
         "No hay un ataque esperando el D6.",
       );
+      if (pending.targetIds) {
+        const targets = pending.targetIds.map((id) =>
+          game.enemies.find((candidate) => candidate.id === id),
+        );
+        requireRule(
+          targets.length > 0 &&
+            targets.every((target) => target && target.hp > 0),
+          "TARGET_GONE",
+          "Un objetivo ya no está disponible.",
+        );
+        const d6 = dice(6);
+        const power =
+          (player.stats.damageMultiplier ?? 1) *
+          content.resource.ultimateMultiplier;
+        game.pendingAttack = null;
+        addEvent(
+          game,
+          "ATTACK_D6",
+          `${player.name} tira D6 para Juicio del guardián: ${d6}.`,
+          [d6],
+          {
+            actorId: player.id,
+            targetId: pending.targetId,
+            ability: "ultimate",
+          },
+        );
+        for (const enemy of targets) {
+          requireRule(
+            enemy,
+            "TARGET_GONE",
+            "Un objetivo ya no está disponible.",
+          );
+          const amount = damage(pending.d20, d6, enemy.defense, false, power);
+          enemy.hp = Math.max(0, enemy.hp - amount);
+          addEvent(
+            game,
+            "ATTACK",
+            `${player.name} causa ${amount} de daño a ${enemy.name}.`,
+            [pending.d20, d6],
+            {
+              actorId: player.id,
+              targetId: enemy.id,
+              ability: "ultimate",
+              amount,
+            },
+          );
+        }
+        safeLoot(game, content);
+        break;
+      }
       const enemy = game.enemies.find(
         (candidate) => candidate.id === pending.targetId,
       );
@@ -1144,7 +1296,63 @@ export function resolve(
         item.ownerId = player.id;
         slots[index] = item.id;
       } else if (object) {
-        requireRule(!object.used, "ALREADY_USED", "Ya se recogió ese objeto.");
+        requireRule(
+          !object.used,
+          "ALREADY_USED",
+          object.kind === "reviver"
+            ? "Ya se usó ese interactuable."
+            : "Ya se recogió ese objeto.",
+        );
+        if (object.kind === "reviver") {
+          const fallen = game.players.filter((member) => member.hp <= 0);
+          requireRule(
+            fallen.length > 0,
+            "NO_FALLEN_PLAYERS",
+            "No hay compañeros caídos.",
+          );
+          const center = { x: object.x, y: object.y + 2 };
+          const positions: Point[] = [];
+          for (const member of fallen) {
+            let destination: Point | undefined;
+            for (let radius = 0; radius <= 3 && !destination; radius++) {
+              for (let dy = -radius; dy <= radius && !destination; dy++) {
+                for (let dx = -radius; dx <= radius; dx++) {
+                  if (Math.abs(dx) + Math.abs(dy) !== radius) continue;
+                  const candidate = { x: center.x + dx, y: center.y + dy };
+                  if (
+                    passable(game, content, candidate, member.id) &&
+                    !positions.some((point) => same(point, candidate)) &&
+                    !game.interactables.some((entry) => same(entry, candidate))
+                  ) {
+                    destination = candidate;
+                    break;
+                  }
+                }
+              }
+            }
+            requireRule(
+              destination,
+              "NO_REVIVE_SPACE",
+              "No hay espacio libre junto al revividor.",
+            );
+            positions.push(destination);
+          }
+          consumeAction(game);
+          fallen.forEach((member, index) => {
+            member.x = positions[index].x;
+            member.y = positions[index].y;
+            member.hp = 1;
+          });
+          object.used = true;
+          addEvent(
+            game,
+            "REVIVE",
+            `${player.name} revive a ${fallen.map((member) => member.name).join(", ")}.`,
+            undefined,
+            { actorId: player.id, targetId: object.id },
+          );
+          break;
+        }
         requireRule(
           Object.hasOwn(content.items, object.itemDefinition),
           "UNKNOWN_ITEM",

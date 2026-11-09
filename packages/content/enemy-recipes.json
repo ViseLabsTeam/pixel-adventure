@@ -23,7 +23,7 @@
   },
   "goblin-archer": {
     "name": "Goblin arquero",
-    "maxHp": 18,
+    "maxHp": 14,
     "defense": 1,
     "resistance": 1,
     "accuracy": 5,

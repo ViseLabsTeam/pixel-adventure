@@ -52,6 +52,10 @@ export const commandSchema = z.object({
       ability: z.enum(["basic", "special", "ultimate"]).optional(),
       targetId: z.string().min(1).max(80),
     }),
+    z.object({
+      type: z.literal("CAST_PALADIN"),
+      ability: z.enum(["special", "ultimate"]),
+    }),
     z.object({ type: z.literal("ROLL_ATTACK_D6") }),
     z.object({
       type: z.literal("INTERACT"),
@@ -102,6 +106,11 @@ export interface PlayerView {
   slot: number;
   hp: number;
   stats: Stats;
+  consecratedBuff?: {
+    percent: 15 | 45;
+    sourcePlayerId: string;
+    appliedRound: number;
+  };
   x: number;
   y: number;
   inventory: (string | null)[];
@@ -156,6 +165,7 @@ export interface GameView {
   pendingAttack?: {
     actorId: string;
     targetId: string;
+    targetIds?: string[];
     ability: "basic" | "special" | "ultimate";
     d20: number;
   } | null;
@@ -268,6 +278,7 @@ export const gameViewSchema: z.ZodType<GameView> = z.object({
     .object({
       actorId: z.string(),
       targetId: z.string(),
+      targetIds: z.array(z.string()).min(1).optional(),
       ability: z.enum(["basic", "special", "ultimate"]),
       d20: z.number().int().min(1).max(20),
     })
@@ -294,6 +305,13 @@ export const gameViewSchema: z.ZodType<GameView> = z.object({
         physicalDamage: nonnegative.optional(),
         magicDamage: nonnegative.optional(),
       }),
+      consecratedBuff: z
+        .object({
+          percent: z.union([z.literal(15), z.literal(45)]),
+          sourcePlayerId: z.string(),
+          appliedRound: nonnegative,
+        })
+        .optional(),
       inventory: z.array(z.string().nullable()),
       potions: z.array(z.string().nullable()).length(4),
       equipment: z.object({

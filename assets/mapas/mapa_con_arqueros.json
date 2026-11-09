@@ -5104,6 +5104,14 @@
       "x": 28,
       "y": 9,
       "itemDefinition": "potion"
+    },
+    {
+      "id": "reviver-1",
+      "kind": "reviver",
+      "name": "Altar de regreso",
+      "x": 10,
+      "y": -14,
+      "itemDefinition": ""
     }
   ],
   "trees": [

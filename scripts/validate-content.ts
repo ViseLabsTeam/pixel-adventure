@@ -168,10 +168,11 @@ for (const chest of prototype.chests)
     `Objeto de cofre desconocido: ${chest.itemDefinition}`,
   );
 for (const object of prototype.interactables)
-  assert(
-    Object.hasOwn(prototype.items, object.itemDefinition),
-    `Objeto interactuable desconocido: ${object.itemDefinition}`,
-  );
+  if (object.kind !== "reviver")
+    assert(
+      Object.hasOwn(prototype.items, object.itemDefinition),
+      `Objeto interactuable desconocido: ${object.itemDefinition}`,
+    );
 assert.equal(
   blocked.size,
   prototype.map.walls.length,
@@ -180,6 +181,31 @@ assert.equal(
 const passable = (x: number, y: number) =>
   prototype.map.terrain[y - prototype.map.minY]?.[x - prototype.map.minX] ===
     "1" && !blocked.has(`${x},${y}`);
+for (const reviver of prototype.interactables.filter(
+  (entry) => entry.kind === "reviver",
+)) {
+  assert(passable(reviver.x, reviver.y), `Revividor bloqueado: ${reviver.id}`);
+  assert(
+    passable(reviver.x, reviver.y + 2),
+    `Llegada sur bloqueada: ${reviver.id}`,
+  );
+  assert(
+    !occupiedPoints.some(
+      (point) =>
+        point !== reviver && point.x === reviver.x && point.y === reviver.y + 2,
+    ),
+    `Llegada sur ocupada: ${reviver.id}`,
+  );
+  assert(
+    [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ].some(([dx, dy]) => passable(reviver.x + dx, reviver.y + dy)),
+    `Revividor inaccesible: ${reviver.id}`,
+  );
+}
 for (const point of [
   ...prototype.map.spawns,
   ...prototype.enemies,
