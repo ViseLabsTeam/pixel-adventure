@@ -180,6 +180,72 @@
       "archetypeId": "goblin",
       "x": 8,
       "y": 30
+    },
+    {
+      "id": "goblin-archer-1",
+      "archetypeId": "goblin-archer",
+      "x": -2,
+      "y": -12
+    },
+    {
+      "id": "goblin-archer-2",
+      "archetypeId": "goblin-archer",
+      "x": 9,
+      "y": -6
+    },
+    {
+      "id": "goblin-archer-3",
+      "archetypeId": "goblin-archer",
+      "x": 23,
+      "y": -5
+    },
+    {
+      "id": "goblin-archer-4",
+      "archetypeId": "goblin-archer",
+      "x": -9,
+      "y": 22
+    },
+    {
+      "id": "goblin-archer-5",
+      "archetypeId": "goblin-archer",
+      "x": -17,
+      "y": 17
+    },
+    {
+      "id": "goblin-archer-6",
+      "archetypeId": "goblin-archer",
+      "x": -7,
+      "y": -3
+    },
+    {
+      "id": "goblin-archer-7",
+      "archetypeId": "goblin-archer",
+      "x": -4,
+      "y": -3
+    },
+    {
+      "id": "goblin-archer-8",
+      "archetypeId": "goblin-archer",
+      "x": 3,
+      "y": 3
+    },
+    {
+      "id": "goblin-archer-9",
+      "archetypeId": "goblin-archer",
+      "x": 10,
+      "y": 3
+    },
+    {
+      "id": "goblin-archer-10",
+      "archetypeId": "goblin-archer",
+      "x": 29,
+      "y": 21
+    },
+    {
+      "id": "goblin-archer-11",
+      "archetypeId": "goblin-archer",
+      "x": 25,
+      "y": 1
     }
   ],
   "image": "Scene_Overview.png",
